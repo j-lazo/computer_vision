@@ -13,8 +13,7 @@ import os
 import pandas as pd
 import classification_models
 import shutil
-from keras.layers import Convolution2D, Dense, Input, Flatten, Dropout, MaxPooling2D, BatchNormalization, \
-    GlobalAveragePooling2D, Concatenate
+
 from sklearn.metrics import roc_curve, auc
 from keras import regularizers
 
@@ -82,27 +81,32 @@ def load_pretrained_model(name_model, weights='imagenet'):
     return base_model
 
 def load_model(name_model, backbone=False, backbone_model=''):
+    model = Sequential()
+
     if backbone is True:
         base_model = load_pretrained_model(backbone_model)
+        model.add(base_model)
     else:
-        model = classification_models.name_model()
-
+        ehm_model? = classification_models.name_model()
+        model = model.add(ehm_model?)
     return model
 
 
-def call_models(name_model, mode, train_data_dir, validation_data_dir, test_data, all_cases_dir, results_dir, test_data_2, fold=''):
+def call_models(name_model, mode, backbone_model = '', train_data_dir, validation_data_dir, test_data, all_cases_dir, results_dir):
 
     # first load model
+    if backbone_model != '':
+        backbone = True
     model = load_model(name_model, backbone, backbone_model)
 
+    adam = Adam(lr=0.0001)
+    sgd = SGD(lr=0.001, momentum=0.9)
+    rms = 'rmsprop'
     metrics = ["accuracy", tf.keras.metrics.Recall(), tf.keras.metrics.Precision()]
     model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=metrics)
     model.summary()
     img_width, img_height = 224, 224
 
-    adam = Adam(lr=0.0001)
-    sgd = SGD(lr=0.001, momentum=0.9)
-    rms = 'rmsprop'
 
     if mode == 'train':
 
@@ -160,20 +164,8 @@ def call_models(name_model, mode, train_data_dir, validation_data_dir, test_data
     base_model.trainable = False
     base_model.summary()
 
-    # -----------here begins the important --------------------------
-    nclass = len(train_gen.class_indices)
-    model = Sequential()
-    model.add(base_model)
-    model.add(GlobalAveragePooling2D())
-    model.add(Dense(2048, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(2048, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(2048, activation='relu', kernel_regularizer=regularizers.l2(0.001)))
-    model.add(Flatten())
-    model.add(Dense(nclass, activation='softmax'))
 
-    # optimizers
+
 
 
 
