@@ -43,6 +43,13 @@ flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than
 
 def load_pretrained_model(name_model, weights='imagenet'):
 
+    """
+    Loads a pretrained model given a name
+    :param name_model: (str) name of the model
+    :param weights: (str) weights names (default imagenet)
+    :return: sequential model with the selected weights
+    """
+
     if name_model == 'VGG16':
         base_model = applications.VGG16(include_top=False, weights=weights)
         base_model.trainable = False
