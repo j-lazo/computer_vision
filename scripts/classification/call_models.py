@@ -1,12 +1,16 @@
+import csv
 from absl import app, flags, logging
 from absl.flags import FLAGS
 import numpy as np
 import tensorflow as tf
-from keras.preprocessing.image import ImageDataGenerator
-from keras.applications.resnet50 import preprocess_input
-from keras.models import Sequential
-from keras import applications
-from keras.optimizers import SGD, Adam, RMSprop, Nadam
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
+from tensorflow.keras import applications
+
+from tensorflow.keras.applications.vgg16 import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
+from tensorflow.keras.applications.vgg19 import VGG19
+
 from matplotlib import pyplot as plt
 import datetime
 import os
@@ -14,10 +18,20 @@ import pandas as pd
 import classification_models
 import shutil
 
+from keras.preprocessing.image import ImageDataGenerator
+
 from sklearn.metrics import roc_curve, auc
 from keras import regularizers
 
-flags.DEFINE_string('train_dataset', '', 'path to dataset')
+flags.DEFINE_string('name_model', '', 'name of the model')
+flags.DEFINE_string('mode', '', 'train or predict')
+flags.DEFINE_string('backbone', '', 'backbone network')
+flags.DEFINE_string('train_dataset', os.getcwd() + 'data/', 'path to dataset')
+flags.DEFINE_string('results_directory', os.getcwd() + 'results/', 'path to dataset')
+flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
+
+
+"""flags.DEFINE_string('train_dataset', '', 'path to dataset')
 flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
@@ -38,7 +52,7 @@ flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
 flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weights` file if different, '
                      'useful in transfer learning with different number of classes')
-flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than 1 GPU.')
+flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than 1 GPU.')"""
 
 
 def load_pretrained_model(name_model, weights='imagenet'):
@@ -51,55 +65,64 @@ def load_pretrained_model(name_model, weights='imagenet'):
     """
 
     if name_model == 'VGG16':
-        base_model = applications.VGG16(include_top=False, weights=weights)
+        base_model = applications.vgg16.VGG16(include_top=False, weights=weights)
         base_model.trainable = False
         base_model.summary()
 
     elif name_model == 'VGG19':
-        base_model = applications.VGG19(include_top=False, weights=weights)
+        base_model = applications.vgg19.VGG19(include_top=False, weights=weights)
         base_model.trainable = False
         base_model.summary()
 
     elif name_model == 'InceptionV3':
-        base_model = applications.InceptionV3(include_top=False, weights=weights)
+        base_model = applications.inception_v3.InceptionV3(include_top=False, weights=weights)
         base_model.trainable = False
         base_model.summary()
 
     elif name_model == 'ResNet50':
-        base_model = applications.ResNet50(include_top=False, weights=weights)
+        base_model = applications.resnet50.ResNet50(include_top=False, weights=weights)
         base_model.trainable = False
         base_model.summary()
 
     elif name_model == 'ResNet101':
-        base_model = applications.ResNet101(include_top=False, weights=weights)
+        base_model = applications.resnet.ResNet101(include_top=False, weights=weights)
         base_model.trainable = False
         base_model.summary()
 
     elif name_model == 'MobileNet':
-        base_model = applications.MobileNet(include_top=False, weights=weights)
+        base_model = applications.mobilenet.MobileNet(include_top=False, weights=weights)
         base_model.trainable = False
         base_model.summary()
 
     elif name_model == 'DenseNet121':
-        base_model = applications.DenseNet121(include_top=False, weights=weights)
+        base_model = applications.densenet.DenseNet121(include_top=False, weights=weights)
+        base_model.trainable = False
+        base_model.summary()
+
+    elif name_model == 'Xception':
+        base_model = applications.xception.Xception(include_top=False, weights=weights)
         base_model.trainable = False
         base_model.summary()
 
     return base_model
 
+
+
 def load_model(name_model, backbone=False, backbone_model=''):
     model = Sequential()
-
+    num_classes = 2
     if backbone is True:
         base_model = load_pretrained_model(backbone_model)
+        cap_model = getattr(classification_models, name_model)(num_classes)
         model.add(base_model)
+        model.add(cap_model)
     else:
-        ehm_model? = classification_models.name_model()
-        model = model.add(ehm_model?)
+        cap_model = getattr(classification_models, name_model)()
+        model = model.add(cap_model)
     return model
 
 
-def call_models(name_model, mode, backbone_model = '', train_data_dir, validation_data_dir, test_data, all_cases_dir, results_dir):
+def call_models(name_model, mode, backbone_model=''): #train_data_dir, validation_data_dir, test_data, all_cases_dir, results_dir):
 
     # first load model
     if backbone_model != '':
@@ -114,12 +137,12 @@ def call_models(name_model, mode, backbone_model = '', train_data_dir, validatio
     model.summary()
     img_width, img_height = 224, 224
 
-
-    if mode == 'train':
+    # then decide how to act according to the mode
+    """if mode == 'train':
 
         # train the model
-        train_gen =
-        validation_gen =
+        train_gen = ''
+        validation_gen = ''
         train_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
         val_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
 
@@ -206,7 +229,7 @@ def call_models(name_model, mode, backbone_model = '', train_data_dir, validatio
     evaluation = model.evaluate(validation_gen, verbose=True, steps=10)
     print('VALIDATION dataset')
     print(metrics)
-    print(evaluation)
+    print(evaluation)"""
 
     # -------------------------predictions on the validation set --------------------------
     """
@@ -382,8 +405,9 @@ def call_models(name_model, mode, backbone_model = '', train_data_dir, validatio
 def main(_argv):
     name_model = FLAGS.name_model
     mode = FLAGS.mode
-
-    base_dir = ''
+    backbone_model = FLAGS.backbone
+    call_models(name_model, mode, backbone_model)
+    """base_dir = ''
     results_dir = ''
     data_dir = ''
     current_wroking_directory = ''.join([base_dir, data, '/', 'all_cases/', fold, '/'])
@@ -392,8 +416,7 @@ def main(_argv):
     val_dir = ''.join([current_wroking_directory, 'val/'])
     results_directory = ''
     test_data_2 = []
-    call_models(name_model, mode, train_data_dir, validation_data_dir, test_data, all_cases_dir, results_dir,
-                test_data_2, fold='')
+    
 
     call_models(train_dir, val_dir, data, test_data, all_cases_dir, results_directory, test_data_2, fold=fold)
 
@@ -431,7 +454,7 @@ def main(_argv):
                          'cys_case_008']
         if fold == 'fold_3':
             test_data = ['urs_case_014', 'urs_case_004', 'urs_case_015', 'urs_case_010', 'urs_case_001', 'cys_case_000',
-                         'cys_case_006', 'cys_case_011']
+                         'cys_case_006', 'cys_case_011']"""
 
 
 if __name__ == '__main__':
