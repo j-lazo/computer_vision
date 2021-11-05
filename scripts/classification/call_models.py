@@ -247,7 +247,7 @@ def call_models(name_model, mode, backbone_model=''): #train_data_dir, validatio
     predict3 = np.argmax(predict3, axis=1)
     label_index = {v: k for k, v in va_gen2.class_indices.items()}
     predict3 = [label_index[p] for p in predict3]
-    """
+    
     ## ------------- save the weights ------------------
     date = datetime.datetime.strftime(datetime.datetime.today(), '%Y%m%d-%Hh%mm')
 
@@ -399,7 +399,7 @@ def call_models(name_model, mode, backbone_model=''): #train_data_dir, validatio
         plt.show()
 
     print('results dir:', results_directory)
-    plt.show()
+    plt.show()"""
 
 
 def main(_argv):
