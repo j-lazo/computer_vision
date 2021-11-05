@@ -27,12 +27,16 @@ flags.DEFINE_string('name_model', '', 'name of the model')
 flags.DEFINE_string('mode', '', 'train or predict')
 flags.DEFINE_string('backbone', '', 'backbone network')
 flags.DEFINE_string('train_dataset', os.getcwd() + 'data/', 'path to dataset')
+flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
+flags.DEFINE_string('test_dataset', '', 'path to test dataset')
 flags.DEFINE_string('results_directory', os.getcwd() + 'results/', 'path to dataset')
+flags.DEFINE_integer('epochs', 1, 'number of epochs')
+flags.DEFINE_integer('batch_size', 4, 'batch size')
+flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
 
 
 """flags.DEFINE_string('train_dataset', '', 'path to dataset')
-flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
                   'fit: model.fit, '
@@ -107,11 +111,10 @@ def load_pretrained_model(name_model, weights='imagenet'):
     return base_model
 
 
-
-def load_model(name_model, backbone=False, backbone_model=''):
+def load_model(name_model, backbone_model=''):
     model = Sequential()
     num_classes = 2
-    if backbone is True:
+    if backbone_model != '':
         base_model = load_pretrained_model(backbone_model)
         cap_model = getattr(classification_models, name_model)(num_classes)
         model.add(base_model)
@@ -122,7 +125,8 @@ def load_model(name_model, backbone=False, backbone_model=''):
     return model
 
 
-def call_models(name_model, mode, backbone_model=''): #train_data_dir, validation_data_dir, test_data, all_cases_dir, results_dir):
+def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validation_data_dir='',
+                test_data='', results_dir=os.getcwd() + 'results/', epochs=1, batch_size=4, backbone_model=''):
 
     # first load model
     if backbone_model != '':
@@ -135,33 +139,49 @@ def call_models(name_model, mode, backbone_model=''): #train_data_dir, validatio
     metrics = ["accuracy", tf.keras.metrics.Recall(), tf.keras.metrics.Precision()]
     model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=metrics)
     model.summary()
-    img_width, img_height = 224, 224
 
     # then decide how to act according to the mode
-    """if mode == 'train':
 
-        # train the model
-        train_gen = ''
-        validation_gen = ''
+    img_width, img_height = 224, 224
+    if mode == 'train':
+
+        img_width, img_height = 224, 224
+
         train_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
         val_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
 
+        # ------generators to feed the model----------------
+
+        train_gen = train_idg.flow_from_directory(train_data_dir,
+                                                  target_size=(img_width, img_height),
+                                                  batch_size=20)
+
+        validation_gen = val_idg.flow_from_directory(validation_data_dir,
+                                                     target_size=(img_width, img_height),
+                                                     batch_size=20)
+
+        # train the model
         model.fit(train_gen,
-                  epochs=3,
+                  epochs=epochs,
                   shuffle=1,
-                  batch_size=20,
-                  validation_batch_size=20,
+                  batch_size=batch_size,
                   validation_data=validation_gen,
+                  validation_batch_size=batch_size,
                   verbose=1)
     elif mode == 'predict':
+        test_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
+        test_gen = test_idg.flow_from_directory(validation_data_dir,
+                                                     target_size=(img_width, img_height),
+                                                     batch_size=50)
 
+        evaluation = model.evaluate(test_gen, verbose=True, steps=10)
         predictions = model.predict(test_gen, verbose=True, steps=1)
 
         # top print the names in each batch of the generator
         # for i in test_gen[0]:
         #    idx = (test_gen.batch_index - 1) * test_gen.batch_size
         #    print(test_gen.filenames[idx: idx + test_gen.batch_size])
-
+        """
         x_0 = [x[0] for x in predicts]
         x_1 = [x[1] for x in predicts]
         names = [os.path.basename(x) for x in test_gen.filenames]
