@@ -142,7 +142,6 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
 
     # then decide how to act according to the mode
 
-    img_width, img_height = 224, 224
     if mode == 'train':
 
         img_width, img_height = 224, 224
