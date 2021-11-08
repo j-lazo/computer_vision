@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 import datetime
 import shutil
 import os
-
+import sys
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
@@ -16,7 +16,9 @@ from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
 from tensorflow.keras.applications.vgg19 import VGG19
 from keras.preprocessing.image import ImageDataGenerator
-from general_functions import data_management
+sys.path.append(os.getcwd() + '/scripts/general_functions/')
+import data_management as dam
+
 
 import classification_models
 from sklearn.metrics import roc_curve, auc
@@ -55,6 +57,60 @@ flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
 flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weights` file if different, '
                      'useful in transfer learning with different number of classes')
 flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than 1 GPU.')"""
+
+class DataGenerator(tf.keras.utils.Sequence):
+    # Generates data for Keras
+    def __init__(self, list_IDs, labels, batch_size=32, dim=(64, 64), n_channels=1,
+                 n_classes=10, shuffle=True):
+        # Initialization
+        self.dim = dim
+        self.batch_size = batch_size
+        self.labels = labels
+        self.list_IDs = list_IDs
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+        self.shuffle = shuffle
+        self.on_epoch_end()
+
+    def __len__(self):
+        # Denotes the number of batches per epoch
+        return int(np.floor(len(self.list_IDs) / self.batch_size))
+
+    def __getitem__(self, index):
+        # Generate one batch of data
+        # Generate indexes of the batch
+        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
+
+        # Find list of IDs
+        list_IDs_temp = [self.list_IDs[k] for k in indexes]
+
+        # Generate data
+        x, y = self.__data_generation(list_IDs_temp)
+
+        return x, y
+
+    def on_epoch_end(self):
+        # Updates indexes after each epoch
+        self.indexes = np.arange(len(self.list_IDs))
+        if self.shuffle == True:
+            np.random.shuffle(self.indexes)
+
+    def __data_generation(self, list_IDs_temp):
+        # Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
+        # Initialization
+        x = np.empty((self.batch_size, * self.dim, self.n_channels))
+        y = np.empty((self.batch_size), dtype=int)
+
+        # Generate data
+        for i, ID in enumerate(list_IDs_temp):
+            # Store sample
+            x[i,] = np.load('data/' + ID + '.npy')
+
+            # Store class
+            y[i] = self.labels[ID]
+
+        return x, keras.utils.to_categorical(y, num_classes=self.n_classes)
+
 
 
 def load_pretrained_model(name_model, weights='imagenet'):
@@ -110,6 +166,7 @@ def load_pretrained_model(name_model, weights='imagenet'):
 
 
 def load_model(name_model, backbone_model=''):
+    print(backbone_model)
     model = Sequential()
     num_classes = 2
     if backbone_model != '':
@@ -118,33 +175,53 @@ def load_model(name_model, backbone_model=''):
         model.add(base_model)
         model.add(cap_model)
     else:
-        cap_model = getattr(classification_models, name_model)()
+        cap_model = getattr(classification_models, name_model)(num_classes)
         model = model.add(cap_model)
     return model
+
+def generate_dict_y_y(general_dict):
+    dict_x = {}
+    dict_y = {}
+    unique_values = set([])
+    for element in general_dict:
+        dict_x[element] = general_dict[element]['image_dir']
+        dict_y[element] = general_dict[element]['classification']
+        unique_values.add(general_dict[element]['classification'])
+
+    return dict_x, dict_y, unique_values
+
 
 
 def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validation_data_dir='',
                 test_data='', results_dir=os.getcwd() + 'results/', epochs=1, batch_size=4, backbone_model=''):
 
-    # first load model
-    if backbone_model != '':
-        backbone = True
-    model = load_model(name_model, backbone, backbone_model)
-
+    # load the data
+    train_data_dict = dam.build_dictionary_data_labels(train_data_dir)
+    val_data_dict = dam.build_dictionary_data_labels(validation_data_dir)
+     # load the model
+    model = load_model(name_model, backbone_model)
     adam = Adam(lr=0.0001)
     sgd = SGD(lr=0.001, momentum=0.9)
     rms = 'rmsprop'
     metrics = ["accuracy", tf.keras.metrics.Recall(), tf.keras.metrics.Precision()]
     model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=metrics)
     model.summary()
+    train_data, train_labels, classes = generate_dict_y_y(train_data_dict)
+    val_data, val_labels, classes = generate_dict_y_y(val_data_dict)
+    # Parameters
+    params = {'dim': (64, 64),
+              'batch_size': 8,
+              'n_classes': len(classes),
+              'n_channels': 3,
+              'shuffle': True}
 
     # then decide how to act according to the mode
-
     if mode == 'train':
 
         img_width, img_height = 224, 224
-
-        train_data = dam.build_dictionary_data_labels(train_data_dir)
+        # Generators
+        training_generator = DataGenerator(train_data, train_labels, **params)
+        validation_generator = DataGenerator(val_data, val_labels, **params)
 
         """train_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
         val_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
@@ -158,13 +235,13 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
         validation_gen = val_idg.flow_from_directory(validation_data_dir,
                                                      target_size=(img_width, img_height),
                                                      batch_size=20)"""
-
+        # 2DO: fix generators
         # train the model
-        model.fit(train_gen,
+        model.fit(training_generator,
                   epochs=epochs,
                   shuffle=1,
                   batch_size=batch_size,
-                  validation_data=validation_gen,
+                  validation_data=validation_generator,
                   validation_batch_size=batch_size,
                   verbose=1)
     elif mode == 'predict':
@@ -426,7 +503,12 @@ def main(_argv):
     name_model = FLAGS.name_model
     mode = FLAGS.mode
     backbone_model = FLAGS.backbone
-    call_models(name_model, mode, backbone_model)
+    dataset_dir = FLAGS.train_dataset
+    val_dataset_dir = FLAGS.val_dataset
+
+    print('INFORMATION:', name_model, backbone_model, mode)
+    call_models(name_model, mode, train_data_dir=dataset_dir, backbone_model=backbone_model,
+                validation_data_dir=val_dataset_dir)
     """base_dir = ''
     results_dir = ''
     data_dir = ''
