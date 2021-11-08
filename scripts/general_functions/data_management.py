@@ -6,6 +6,7 @@ import cv2
 import tqdm
 import pandas as pd
 
+
 def discrepancies(file_1, file_2):
     """
     Check for discrepancies in the annotations between two datasets files.
@@ -26,23 +27,111 @@ def discrepancies(file_1, file_2):
     return list_discrepancies
 
 
-def create_annotations_file(directory, file_extension='.csv'):
+def update_dictionary(dictionary, image_name, utility='', clearness='', resolution='', procedure='', imaging_type='',
+                      type_artifact='', tissue_type='', fov_shape='', roi=[]):
+
+    """
+    updates a dictionary and its keys, the only mandatory parameter is 'image_name'
+
+    :param dictionary: (dict)
+    :param image_name: (str)
+    :param utility: (str)
+    :param clearness: (str)
+    :param resolution: (str)
+    :param procedure: (str)
+    :param imaging_type: (str)
+    :param type_artifact: (str)
+    :param tissue_type: (str)
+    :param fov_shape: (str) Field of View Shape
+    :param roi: (list) Region of Interest
+    :return: (dict) dictionary with the update entry
+    """
+
+    if procedure == '':
+        if image_name[:3] == 'urs':
+            procedure = 'ureteroscopy'
+        elif image_name[:3] == 'cys':
+            procedure = 'cystoscopy'
+
+    dictionary.update({image_name: {'useful': utility, 'clear': clearness, 'resolution': resolution,
+                                    'procedure': procedure, 'imaging type': imaging_type, 'type artifact': type_artifact,
+                                    'tissue type': tissue_type, 'fov shape': fov_shape, 'ROI': roi}})
+    return dictionary
+
+
+def create_annotations_file(directory, file_name='', file_extension='.csv'):
     """
     Creates an annotation file according to the structure of the directory tree. The output files could be
     '.csv' or '.json'. The function only considers up to a maximum of two sub-directories.
 
     :param directory: (str) path to the directory to analyze
+    :param file_name: (str) name to save the file
     :param file_extension: (str) .csv or .json
     :return: a file with the annotations according to the structure of the directory
     """
 
     dictionary = {}
-    list_subfolders_with_paths = [f.path for f in os.scandir(directory) if f.is_dir()]
+    list_subfolders_with_paths = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
     for sub_folder in list_subfolders_with_paths:
-        sub_sub_folders = [f for f in os.listdir(directory) if f.is_dir()]
+        sub_folder_dir = os.path.join(directory, sub_folder)
+        sub_sub_folders = [f for f in os.listdir(sub_folder_dir) if os.path.isdir(os.path.join(sub_folder_dir, f))]
         if sub_sub_folders:
-            for 
+            print(f'sub folder found: {sub_sub_folders} in {sub_folder}')
+            for sub_sub_folder in sub_sub_folders:
+                list_imgs = sorted(os.listdir(os.path.join(directory, sub_folder, sub_sub_folder)))
+                for i, image_name in enumerate(tqdm.tqdm(list_imgs, desc='Reading images')):
+                    imaging_type = sub_sub_folder
+                    tissue_type = sub_folder
+                    dictionary = update_dictionary(dictionary, image_name, imaging_type=imaging_type, tissue_type=tissue_type)
 
+
+        else:
+            print(f'no sub-folders found in {sub_folder}')
+            list_imgs = sorted(os.listdir(os.path.join(directory, sub_folder)))
+            for i, image_name in enumerate(tqdm.tqdm(list_imgs, desc='Reading images')):
+                imaging_type = 'WLI'
+                tissue_type = sub_folder
+                dictionary = update_dictionary(dictionary, image_name, imaging_type=imaging_type, tissue_type=tissue_type)
+
+    df = pd.DataFrame(data=dictionary).T
+    name_file = save_data_frame_to_file(df, file_name, file_extension, directory)
+    print(f'data file saved at {name_file}')
+
+
+def save_data_frame_to_file(data_frame, file_name, file_extension, directory=os.getcwd()):
+    """
+    Save a data frame object into a .csv or .json
+
+    :param data_frame: Pandas data frame
+    :param file_name: (str) name of the file
+    :param file_extension: either .json or .csv
+    :param directory: directory where to save the file. Default value: current directory
+    :return: name of the path where the file was saved
+    """
+
+    def save_file(file_path, file_extension):
+
+        if file_extension == '.csv':
+            data_frame.to_csv(file_path)
+        elif file_extension == '.json':
+            data_frame.to_json(file_path)
+        else:
+            print('File format not recognized')
+
+    if file_name == '':
+        file_path = ''.join([directory, '/', 'annotations', file_extension])
+    else:
+        file_path = ''.join([directory, '/', file_name, file_extension])
+
+    if not(os.path.isfile(file_path)):
+        save_file(file_path, file_extension)
+    else:
+        list_files = [f for f in os.listdir(directory) if file_name in f]
+        file_path = ''.join([directory, '/', 'annotations', '_',str(len(list_files)+1), file_extension])
+
+    save_file(file_path,file_extension)
+
+    return file_path
 
 
 def read_annotation_file(annotations_dir):
@@ -74,7 +163,7 @@ def build_dictionary_from_directory(path_dir, build_from_directory_tree=True, pa
     :param path_dir: (str) path of the directory from which to build the dictionary
     :param build_from_directory_tree: (bool) The dataset is arranged in different folders according to
         its classes (True) otherwise (False)
-    :param annotation_file_dir: (str) .csv or .json file containing the annotations of the dataset
+    :param path_annotation_file: (str) .csv or .json file containing the annotations of the dataset
     :return: (dict) Dictionary that maps the elements in the path (x) with its corresponding annotations (y)
     """
 
@@ -113,6 +202,7 @@ def determine_if_subfolders_exists(path_dir):
     else:
         return False
 
+
 def build_dictionary_data_labels(path_dir, path_annotation_file=''):
 
     """
@@ -120,7 +210,7 @@ def build_dictionary_data_labels(path_dir, path_annotation_file=''):
 
     :param path_dir: (str or list)
     :param annotation_file_dir: (str or list)
-    :return:
+    :return: (dict)
     """
 
     dictionary = {}
@@ -151,7 +241,7 @@ def read_mat_files(file_dir):
     return mat
 
 
-def analysze_dataset(path_dataset):
+def analyze_dataset(path_dataset):
     """
     Chek all the original image sizes inside a directory and its sub-directories
 
