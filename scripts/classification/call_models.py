@@ -1,27 +1,25 @@
-import csv
 from absl import app, flags, logging
 from absl.flags import FLAGS
 import numpy as np
+import pandas as pd
+import csv
+from matplotlib import pyplot as plt
+import datetime
+import shutil
+import os
+
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
 from tensorflow.keras import applications
-
 from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
 from tensorflow.keras.applications.vgg19 import VGG19
-
-from matplotlib import pyplot as plt
-import datetime
-import os
-import pandas as pd
-import classification_models
-import shutil
-
 from keras.preprocessing.image import ImageDataGenerator
+from general_functions import data_management
 
+import classification_models
 from sklearn.metrics import roc_curve, auc
-from keras import regularizers
 
 flags.DEFINE_string('name_model', '', 'name of the model')
 flags.DEFINE_string('mode', '', 'train or predict')
@@ -146,7 +144,9 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
 
         img_width, img_height = 224, 224
 
-        train_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
+        train_data = dam.build_dictionary_data_labels(train_data_dir)
+
+        """train_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
         val_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
 
         # ------generators to feed the model----------------
@@ -157,7 +157,7 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
 
         validation_gen = val_idg.flow_from_directory(validation_data_dir,
                                                      target_size=(img_width, img_height),
-                                                     batch_size=20)
+                                                     batch_size=20)"""
 
         # train the model
         model.fit(train_gen,
@@ -422,6 +422,7 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
 
 
 def main(_argv):
+
     name_model = FLAGS.name_model
     mode = FLAGS.mode
     backbone_model = FLAGS.backbone
