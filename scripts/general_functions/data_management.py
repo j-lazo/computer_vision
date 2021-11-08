@@ -5,6 +5,8 @@ import numpy as np
 import cv2
 import tqdm
 import pandas as pd
+import keras
+import tensorflow as tf
 
 
 def discrepancies(file_1, file_2):
@@ -171,11 +173,13 @@ def build_dictionary_from_directory(path_dir, build_from_directory_tree=True, pa
     if build_from_directory_tree is True:
         print(f'More than 1 sub-folder found in the directory: {path_dir}')
         print('It will be assumed that the sub-folders found correspond to the different classes of the dataset')
-        list_subfolders_with_paths = [f.path for f in os.scandir(path_dir) if f.is_dir()]
-        for sub_folder in list_subfolders_with_paths:
-            list_imgs = os.listdir(os.path.join(sub_folder))
+        #list_subfolders_with_paths = [f.path for f in os.scandir(path_dir) if f.is_dir()]
+        list_subfolders = [f for f in os.listdir(path_dir) if os.path.isdir(os.path.join(path_dir, f))]
+        for sub_folder in list_subfolders:
+            sub_folder_dir = os.path.join(path_dir, sub_folder)
+            list_imgs = os.listdir(sub_folder_dir)
             for image in list_imgs:
-                dictionary.update({image:{'image_dir':os.path.join(sub_folder, image),
+                dictionary.update({image:{'image_dir':os.path.join(sub_folder_dir, image),
                                           'classification':sub_folder}})
 
     else:
