@@ -1,26 +1,24 @@
 from absl import app, flags, logging
 from absl.flags import FLAGS
 import numpy as np
+import tensorflow as tf
+import os
+import sys
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
+from tensorflow.keras import applications
+from keras.preprocessing.image import ImageDataGenerator
+sys.path.append(os.getcwd() + '/scripts/general_functions/')
+import data_management as dam
+import classification_models
+import cv2
+
 import pandas as pd
 import csv
 from matplotlib import pyplot as plt
 import datetime
 import shutil
-import os
-import sys
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
-from tensorflow.keras import applications
-from tensorflow.keras.applications.vgg16 import VGG16
-from tensorflow.keras.applications.vgg16 import preprocess_input, decode_predictions
-from tensorflow.keras.applications.vgg19 import VGG19
-from keras.preprocessing.image import ImageDataGenerator
-sys.path.append(os.getcwd() + '/scripts/general_functions/')
-import data_management as dam
 
-
-import classification_models
 from sklearn.metrics import roc_curve, auc
 
 flags.DEFINE_string('name_model', '', 'name of the model')
@@ -29,7 +27,7 @@ flags.DEFINE_string('backbone', '', 'backbone network')
 flags.DEFINE_string('train_dataset', os.getcwd() + 'data/', 'path to dataset')
 flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
 flags.DEFINE_string('test_dataset', '', 'path to test dataset')
-flags.DEFINE_string('results_directory', os.getcwd() + 'results/', 'path to dataset')
+flags.DEFINE_string('results_dir', os.getcwd() + 'results/', 'path to dataset')
 flags.DEFINE_integer('epochs', 1, 'number of epochs')
 flags.DEFINE_integer('batch_size', 4, 'batch size')
 flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
@@ -80,8 +78,8 @@ class DataGenerator(tf.keras.utils.Sequence):
         # Generate one batch of data
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-
         # Find list of IDs
+
         list_IDs_temp = [self.list_IDs[k] for k in indexes]
 
         # Generate data
@@ -104,12 +102,17 @@ class DataGenerator(tf.keras.utils.Sequence):
         # Generate data
         for i, ID in enumerate(list_IDs_temp):
             # Store sample
-            x[i,] = np.load('data/' + ID + '.npy')
+            if ID.endswith('.csv'):
+                x[i,] = np.load(ID)
+            elif ID.endswith('.png') or ID.endswith('.jpg') or ID.endswith('.jpeg'):
+                img = cv2.imread(ID)/255
+                reshaped = cv2.resize(img, self.dim)
+                x[i,] = reshaped
 
             # Store class
-            y[i] = self.labels[ID]
+            y[i] = self.labels[i]
 
-        return x, keras.utils.to_categorical(y, num_classes=self.n_classes)
+        return x, tf.keras.utils.to_categorical(y, num_classes=self.n_classes)
 
 
 
@@ -179,49 +182,134 @@ def load_model(name_model, backbone_model=''):
         model = model.add(cap_model)
     return model
 
-def generate_dict_y_y(general_dict):
+
+def generate_dict_x_y(general_dict):
     dict_x = {}
     dict_y = {}
-    unique_values = set([])
-    for element in general_dict:
-        dict_x[element] = general_dict[element]['image_dir']
-        dict_y[element] = general_dict[element]['classification']
-        unique_values.add(general_dict[element]['classification'])
+    unique_values = []
+    for i, element in enumerate(general_dict):
+        dict_x[i] = general_dict[element]['image_dir']
+        if general_dict[element]['classification'] not in unique_values:
+            unique_values.append(general_dict[element]['classification'])
+        dict_y[i] = int(unique_values.index(general_dict[element]['classification']))
 
     return dict_x, dict_y, unique_values
 
 
+def load_data(data_dir, backbone_model):
+
+    data_dictionary = dam.build_dictionary_data_labels(data_dir)
+    # ------generators to feed the model----------------
+
+    if backbone_model != '':
+
+        list_files_path = []
+        class_types = []
+        unique_values = []
+
+        for element in data_dictionary:
+            list_files_path.append(data_dictionary[element]['image_dir'])
+            if data_dictionary[element]['classification'] not in unique_values:
+                unique_values.append(data_dictionary[element]['classification'])
+            class_types.append(int(unique_values.index(data_dictionary[element]['classification'])))
+
+        dataframe = pd.DataFrame({'filename':list_files_path, 'class': class_types})
+        print(dataframe)
+        print(dataframe)
+        if backbone_model == 'VGG16':
+            data_idg = ImageDataGenerator(preprocessing_function= tf.keras.applications.vgg16.preprocess_input)
+            img_width, img_height = 224, 224
+
+        elif backbone_model == 'VGG19':
+            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.vgg19.preprocess_input)
+            img_width, img_height = 224, 224
+
+        elif backbone_model == 'InceptionV3':
+            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.inception_v3.preprocess_input)
+            img_width, img_height = 224, 224
+
+        elif backbone_model == 'ResNet50':
+            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.resnet50.preprocess_input)
+            img_width, img_height = 224, 224
+
+        elif backbone_model == 'ResNet101':
+            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.resnet.preprocess_input)
+            img_width, img_height = 224, 224
+
+        elif backbone_model == 'MobileNet':
+            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.mobilenet.preprocess_input)
+            img_width, img_height = 224, 224
+
+        elif backbone_model == 'DenseNet121':
+            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.densenet.preprocess_input)
+            img_width, img_height = 224, 224
+
+        elif backbone_model == 'Xception':
+            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.xception.preprocess_input)
+            img_width, img_height = 224, 224
+
+        data_generator = data_idg.flow_from_dataframe(dataframe,
+                                                  target_size=(img_width, img_height),
+                                                  batch_size=20,
+                                                  class_mode='binary')
+        num_classes = len(data_generator.class_indices)
+
+    else:
+        # Parameters
+        data, labels, num_classes = generate_dict_x_y(data_dictionary)
+        img_width, img_height = 300, 300
+        params = {'dim': (img_width, img_height),
+                  'batch_size': 8,
+                  'n_classes': num_classes,
+                  'n_channels': 3,
+                  'shuffle': True}
+        data_generator = DataGenerator(data, labels, params)
+
+    return data_generator, num_classes
+
+
+def train_model(model):
+
+    return model
+
+
 
 def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validation_data_dir='',
-                test_data='', results_dir=os.getcwd() + 'results/', epochs=1, batch_size=4, backbone_model=''):
+                test_data='', results_dir=os.getcwd() + 'results/', epochs=2, batch_size=4, backbone_model=''):
 
     # load the data
-    train_data_dict = dam.build_dictionary_data_labels(train_data_dir)
+    """train_data_dict = dam.build_dictionary_data_labels(train_data_dir)
     val_data_dict = dam.build_dictionary_data_labels(validation_data_dir)
-     # load the model
+    train_data, train_labels, train_classes = generate_dict_x_y(train_data_dict)
+    val_data, val_labels, val_classes = generate_dict_x_y(val_data_dict)
+    num_classes = max([len(train_classes), len(val_classes)])
+
+    img_width, img_height = 224, 224
+    # Parameters
+    params = {'dim': (img_width, img_height),
+              'batch_size': 8,
+              'n_classes': num_classes,
+              'n_channels': 3,
+              'shuffle': True}
+
+    # Generators
+    training_generator = DataGenerator(train_data, train_labels, **params)
+    validation_generator = DataGenerator(val_data, val_labels, **params)"""
+
+    training_generator = load_data(train_data_dir, backbone_model)
+    validation_generator = load_data(validation_data_dir, backbone_model)
+
+    # load the model
     model = load_model(name_model, backbone_model)
     adam = Adam(lr=0.0001)
     sgd = SGD(lr=0.001, momentum=0.9)
     rms = 'rmsprop'
     metrics = ["accuracy", tf.keras.metrics.Recall(), tf.keras.metrics.Precision()]
     model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=metrics)
-    model.summary()
-    train_data, train_labels, classes = generate_dict_y_y(train_data_dict)
-    val_data, val_labels, classes = generate_dict_y_y(val_data_dict)
-    # Parameters
-    params = {'dim': (64, 64),
-              'batch_size': 8,
-              'n_classes': len(classes),
-              'n_channels': 3,
-              'shuffle': True}
+    #model.summary()
 
     # then decide how to act according to the mode
     if mode == 'train':
-
-        img_width, img_height = 224, 224
-        # Generators
-        training_generator = DataGenerator(train_data, train_labels, **params)
-        validation_generator = DataGenerator(val_data, val_labels, **params)
 
         """train_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
         val_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
@@ -235,7 +323,6 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
         validation_gen = val_idg.flow_from_directory(validation_data_dir,
                                                      target_size=(img_width, img_height),
                                                      batch_size=20)"""
-        # 2DO: fix generators
         # train the model
         model.fit(training_generator,
                   epochs=epochs,
@@ -289,12 +376,6 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
     base_model = applications.ResNet50(include_top=False, weights='imagenet')
     base_model.trainable = False
     base_model.summary()
-
-
-
-
-
-
 
     for layer in base_model.layers[:-4]:
         layer.trainable = False
