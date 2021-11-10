@@ -34,7 +34,7 @@ flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
 
 
-"""flags.DEFINE_string('train_dataset', '', 'path to dataset')
+"""
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
                   'fit: model.fit, '
@@ -226,7 +226,7 @@ def load_data(data_dir, backbone_model):
 
         elif backbone_model == 'InceptionV3':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.inception_v3.preprocess_input)
-            img_width, img_height = 224, 224
+            img_width, img_height = 299, 299
 
         elif backbone_model == 'ResNet50':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.resnet50.preprocess_input)
@@ -246,12 +246,14 @@ def load_data(data_dir, backbone_model):
 
         elif backbone_model == 'Xception':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.xception.preprocess_input)
-            img_width, img_height = 224, 224
+            img_width, img_height = 299, 299
 
         data_generator = data_idg.flow_from_dataframe(dataframe,
                                                   target_size=(img_width, img_height),
                                                   batch_size=20,
-                                                  class_mode='binary')
+                                                  class_mode='categorical',
+                                                      x_col='',
+                                                      y_col='')
         num_classes = len(data_generator.class_indices)
 
     else:
