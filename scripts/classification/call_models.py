@@ -54,7 +54,8 @@ flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
 flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weights` file if different, '
                      'useful in transfer learning with different number of classes')
-flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than 1 GPU.')"""
+flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than 1 GPU.')
+"""
 
 class DataGenerator(tf.keras.utils.Sequence):
     # Generates data for Keras
@@ -115,7 +116,6 @@ class DataGenerator(tf.keras.utils.Sequence):
         return x, tf.keras.utils.to_categorical(y, num_classes=self.n_classes)
 
 
-
 def load_pretrained_model(name_model, weights='imagenet'):
 
     """
@@ -128,50 +128,41 @@ def load_pretrained_model(name_model, weights='imagenet'):
     if name_model == 'VGG16':
         base_model = applications.vgg16.VGG16(include_top=False, weights=weights)
         base_model.trainable = False
-        base_model.summary()
 
     elif name_model == 'VGG19':
         base_model = applications.vgg19.VGG19(include_top=False, weights=weights)
         base_model.trainable = False
-        base_model.summary()
 
     elif name_model == 'InceptionV3':
         base_model = applications.inception_v3.InceptionV3(include_top=False, weights=weights)
         base_model.trainable = False
-        base_model.summary()
 
     elif name_model == 'ResNet50':
         base_model = applications.resnet50.ResNet50(include_top=False, weights=weights)
         base_model.trainable = False
-        base_model.summary()
 
     elif name_model == 'ResNet101':
         base_model = applications.resnet.ResNet101(include_top=False, weights=weights)
         base_model.trainable = False
-        base_model.summary()
 
     elif name_model == 'MobileNet':
         base_model = applications.mobilenet.MobileNet(include_top=False, weights=weights)
         base_model.trainable = False
-        base_model.summary()
 
     elif name_model == 'DenseNet121':
         base_model = applications.densenet.DenseNet121(include_top=False, weights=weights)
         base_model.trainable = False
-        base_model.summary()
 
     elif name_model == 'Xception':
         base_model = applications.xception.Xception(include_top=False, weights=weights)
         base_model.trainable = False
-        base_model.summary()
 
     return base_model
 
 
-def load_model(name_model, backbone_model=''):
-    print(backbone_model)
+def load_model(name_model, backbone_model='', num_classes=1):
+
     model = Sequential()
-    num_classes = 2
     if backbone_model != '':
         base_model = load_pretrained_model(backbone_model)
         cap_model = getattr(classification_models, name_model)(num_classes)
@@ -184,6 +175,7 @@ def load_model(name_model, backbone_model=''):
 
 
 def generate_dict_x_y(general_dict):
+
     dict_x = {}
     dict_y = {}
     unique_values = []
@@ -196,26 +188,15 @@ def generate_dict_x_y(general_dict):
     return dict_x, dict_y, unique_values
 
 
-def load_data(data_dir, backbone_model):
+def load_data(data_dir, backbone_model, img_size=(255,255), batch_size=8):
 
     data_dictionary = dam.build_dictionary_data_labels(data_dir)
     # ------generators to feed the model----------------
 
     if backbone_model != '':
 
-        list_files_path = []
-        class_types = []
-        unique_values = []
+        dataframe = pd.DataFrame(data_dictionary).T
 
-        for element in data_dictionary:
-            list_files_path.append(data_dictionary[element]['image_dir'])
-            if data_dictionary[element]['classification'] not in unique_values:
-                unique_values.append(data_dictionary[element]['classification'])
-            class_types.append(int(unique_values.index(data_dictionary[element]['classification'])))
-
-        dataframe = pd.DataFrame({'filename':list_files_path, 'class': class_types})
-        print(dataframe)
-        print(dataframe)
         if backbone_model == 'VGG16':
             data_idg = ImageDataGenerator(preprocessing_function= tf.keras.applications.vgg16.preprocess_input)
             img_width, img_height = 224, 224
@@ -250,17 +231,16 @@ def load_data(data_dir, backbone_model):
 
         data_generator = data_idg.flow_from_dataframe(dataframe,
                                                   target_size=(img_width, img_height),
-                                                  batch_size=20,
+                                                  batch_size=batch_size,
                                                   class_mode='categorical',
-                                                      x_col='',
-                                                      y_col='')
-        num_classes = len(data_generator.class_indices)
+                                                      x_col='image_dir',
+                                                      y_col='classification')
+        num_classes = dataframe['classification'].nunique()
 
     else:
         # Parameters
         data, labels, num_classes = generate_dict_x_y(data_dictionary)
-        img_width, img_height = 300, 300
-        params = {'dim': (img_width, img_height),
+        params = {'dim': img_size,
                   'batch_size': 8,
                   'n_classes': num_classes,
                   'n_channels': 3,
@@ -277,55 +257,25 @@ def train_model(model):
 
 
 def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validation_data_dir='',
-                test_data='', results_dir=os.getcwd() + 'results/', epochs=2, batch_size=4, backbone_model=''):
+                test_data='', results_dir=os.getcwd() + 'results/', epochs=2, batch_size=4, learning_rate=0.001,
+                backbone_model=''):
 
-    # load the data
-    """train_data_dict = dam.build_dictionary_data_labels(train_data_dir)
-    val_data_dict = dam.build_dictionary_data_labels(validation_data_dir)
-    train_data, train_labels, train_classes = generate_dict_x_y(train_data_dict)
-    val_data, val_labels, val_classes = generate_dict_x_y(val_data_dict)
-    num_classes = max([len(train_classes), len(val_classes)])
-
-    img_width, img_height = 224, 224
-    # Parameters
-    params = {'dim': (img_width, img_height),
-              'batch_size': 8,
-              'n_classes': num_classes,
-              'n_channels': 3,
-              'shuffle': True}
-
-    # Generators
-    training_generator = DataGenerator(train_data, train_labels, **params)
-    validation_generator = DataGenerator(val_data, val_labels, **params)"""
-
-    training_generator = load_data(train_data_dir, backbone_model)
-    validation_generator = load_data(validation_data_dir, backbone_model)
+    # Define Generators
+    training_generator, num_classes = load_data(train_data_dir, backbone_model,batch_size=batch_size)
+    validation_generator, num_classes = load_data(validation_data_dir, backbone_model)
 
     # load the model
-    model = load_model(name_model, backbone_model)
-    adam = Adam(lr=0.0001)
-    sgd = SGD(lr=0.001, momentum=0.9)
-    rms = 'rmsprop'
+    model = load_model(name_model, backbone_model, num_classes)
+    model.summary()
+    adam = Adam(learning_rate=learning_rate)
+    sgd = SGD(learning_rate=learning_rate, momentum=0.9)
     metrics = ["accuracy", tf.keras.metrics.Recall(), tf.keras.metrics.Precision()]
     model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=metrics)
-    #model.summary()
 
     # then decide how to act according to the mode
     if mode == 'train':
 
-        """train_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
-        val_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
-
-        # ------generators to feed the model----------------
-
-        train_gen = train_idg.flow_from_directory(train_data_dir,
-                                                  target_size=(img_width, img_height),
-                                                  batch_size=20)
-
-        validation_gen = val_idg.flow_from_directory(validation_data_dir,
-                                                     target_size=(img_width, img_height),
-                                                     batch_size=20)"""
-        # train the model
+        # Train the model
         model.fit(training_generator,
                   epochs=epochs,
                   shuffle=1,
@@ -333,6 +283,7 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
                   validation_data=validation_generator,
                   validation_batch_size=batch_size,
                   verbose=1)
+
     elif mode == 'predict':
         test_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
         test_gen = test_idg.flow_from_directory(validation_data_dir,
@@ -340,7 +291,7 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
                                                      batch_size=50)
 
         evaluation = model.evaluate(test_gen, verbose=True, steps=10)
-        predictions = model.predict(test_gen, verbose=True, steps=1)
+        prediction = model.predict(test_gen, verbose=True, steps=1)
 
         # top print the names in each batch of the generator
         # for i in test_gen[0]:
@@ -581,6 +532,10 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
     plt.show()"""
 
 
+def experiment_1(_argv):
+    pass
+
+
 def main(_argv):
 
     name_model = FLAGS.name_model
@@ -592,54 +547,7 @@ def main(_argv):
     print('INFORMATION:', name_model, backbone_model, mode)
     call_models(name_model, mode, train_data_dir=dataset_dir, backbone_model=backbone_model,
                 validation_data_dir=val_dataset_dir)
-    """base_dir = ''
-    results_dir = ''
-    data_dir = ''
-    current_wroking_directory = ''.join([base_dir, data, '/', 'all_cases/', fold, '/'])
 
-    train_dir = ''.join([current_wroking_directory, 'train/'])
-    val_dir = ''.join([current_wroking_directory, 'val/'])
-    results_directory = ''
-    test_data_2 = []
-    
-
-    call_models(train_dir, val_dir, data, test_data, all_cases_dir, results_directory, test_data_2, fold=fold)
-
-    all_cases_dir = ''.join([base_dir, data, '/'])
-
-    data = 'all'
-    fold = 'fold_3'
-    if data == 'cys':
-        if fold == 'fold_1':
-            test_data = ['cys_case_012', 'cys_case_001', 'cys_case_005']
-            test_data_2 = ['urs_case_005', 'urs_case_001', 'urs_case_009']
-        if fold == 'fold_2':
-            test_data = ['cys_case_010', 'cys_case_002', 'cys_case_008']
-            test_data_2 = ['urs_case_007', 'urs_case_012', 'urs_case_011', 'urs_case_006']
-        if fold == 'fold_3':
-            test_data = ['cys_case_000', 'cys_case_006', 'cys_case_011']
-            test_data_2 = ['urs_case_014', 'urs_case_004', 'urs_case_015', 'urs_case_010', 'urs_case_001']
-
-    if data == 'urs':
-        if fold == 'fold_1':
-            test_data = ['urs_case_005', 'urs_case_001', 'urs_case_009']
-            test_data_2 = ['cys_case_012', 'cys_case_001', 'cys_case_005']
-        if fold == 'fold_2':
-            test_data = ['urs_case_007', 'urs_case_012', 'urs_case_011', 'urs_case_006']
-            test_data_2 = ['cys_case_010', 'cys_case_002', 'cys_case_008']
-        if fold == 'fold_3':
-            test_data = ['urs_case_014', 'urs_case_004', 'urs_case_015', 'urs_case_010', 'urs_case_001']
-            test_data_2 = ['cys_case_000', 'cys_case_006', 'cys_case_011']
-
-    if data == 'all':
-        if fold == 'fold_1':
-            test_data = ['urs_case_005', 'urs_case_001', 'urs_case_009', 'cys_case_012', 'cys_case_001', 'cys_case_005']
-        if fold == 'fold_2':
-            test_data = ['urs_case_007', 'urs_case_012', 'urs_case_011', 'urs_case_006', 'cys_case_010', 'cys_case_002',
-                         'cys_case_008']
-        if fold == 'fold_3':
-            test_data = ['urs_case_014', 'urs_case_004', 'urs_case_015', 'urs_case_010', 'urs_case_001', 'cys_case_000',
-                         'cys_case_006', 'cys_case_011']"""
 
 
 if __name__ == '__main__':
