@@ -1,14 +1,101 @@
 import os
 import scipy.io
-from matplotlib import pyplot as plt
 import numpy as np
 import cv2
 import tqdm
 import pandas as pd
+import ast
+import shutil
+import random
+
+from matplotlib import pyplot as plt
 import keras
 import tensorflow as tf
-import ast
 
+def check_folder_exists(folder_dir, create_folder=False):
+
+    if not(os.path.isdir(folder_dir)):
+        exists = False
+        if create_folder is True:
+            os.mkdir(folder_dir)
+            os.mkdir(folder_dir + 'images')
+            os.mkdir(folder_dir + 'masks')
+
+    else:
+        exists = True
+    return exists
+
+
+
+def generate_training_and_validation_sets(input_directory, output_directory,
+                                          training_percentage=0.5, test_dataset='False',
+                                          input_sub_dirs=[], pairs_of_data=[]):
+
+    """
+    By default splits an image and mask dataset into training/validation with a 0.5/0.5 rate
+    If test dataset is selected, the percentage for each of them should be input in list form.
+    By default it considers that input directory contains two folders: images and masks, where masks
+    and images have the same name.
+    If several sources of input data folders are considers use
+    :param input_directory: A directory where the dataset to be split is located
+    :param output_directory: Location of the output directory
+    :param test_dataset: (bool) False by default. Splits the dataset into train/val/test
+    :param input_sub_dirs (list of strings) If the input data is contained in different folders, indicate the name of
+    the folders to be considered inside 'Input directory'
+    :param training_percentage: (float, list) default 0.5 If test_dataset is True, a list with the
+    percentages for [train, val, test] should be indicated
+    :param pairs_of_data: (list of strings) default []. If the pairs of data between the annotations and the data have different
+    indication indicate its extensions [data_extension, annotation_extension] e.g.: ['.npy', '.png']
+    :return:
+    """
+
+    training_dir = output_directory + 'train/'
+    validation_dir = output_directory + 'val/'
+    check_folder_exists(training_dir, create_folder=True)
+    check_folder_exists(validation_dir, create_folder=True)
+    list_destination_folders = [training_dir, validation_dir]
+
+    if test_dataset is True:
+        test_dir = output_directory + 'test/'
+        check_folder_exists(test_dir, create_folder=True)
+        list_destination_folders.append(test_dir)
+
+    def _copy_imgs(input_directory, list_destination_folders, training_percentage):
+        files_path_images = "".join([input_directory, 'images/'])
+        files_path_masks = "".join([input_directory, 'masks/'])
+        original_images = sorted(os.listdir(files_path_images))
+        label_images = sorted(os.listdir(files_path_masks))
+
+        original_images = [image[:-4] for image in original_images]
+        label_images = [image[:-4] for image in label_images]
+
+        for i, image in enumerate(original_images):
+
+            destination_dir = random.choices(list_destination_folders, weights=training_percentage)[0]
+            if image in label_images:
+                print(f'{image} image and label exists')
+                if pairs_of_data:
+                    name_img = ''.join([image, pairs_of_data[0]])
+                    name_mask = ''.join([image, pairs_of_data[1]])
+                else:
+                    name_img = ''.join([image, '.png'])
+                    name_mask = ''.join([image, '.png'])
+
+                shutil.copy(''.join([files_path_images, name_img]), ''.join([destination_dir, 'images/', name_img]))
+                shutil.copy(''.join([files_path_masks, name_mask]), ''.join([destination_dir, 'masks/', name_mask]))
+
+            else:
+                print(f'the pair of {image} does not exists')
+
+
+    if not input_sub_dirs :
+        _copy_imgs(input_directory, list_destination_folders, training_percentage)
+
+    else:
+        for sub_folder in input_sub_dirs:
+            print(sub_folder)
+            input_dir = ''.join([input_directory, sub_folder, '/'])
+            _copy_imgs(input_dir, list_destination_folders, training_percentage)
 
 def generate_mask_from_points(img, mask_points):
     """
