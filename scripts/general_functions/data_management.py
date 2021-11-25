@@ -7,7 +7,90 @@ import tqdm
 import pandas as pd
 import keras
 import tensorflow as tf
+import ast
 
+
+def generate_mask_from_points(img, mask_points):
+    """
+
+    :param img: (image)
+    :param mask_points: (list with tuples)
+    :return: (array) binary image
+    """
+    img_shape = np.shape(img)
+    mask = np.zeros([img_shape[0], img_shape[1]])
+
+    # in case there is more than one polygon
+    if np.shape(mask_points)[0] > 1:
+        for mask_point in mask_points:
+            mp = []
+            mp.append(mask_point)
+            mp = np.array(mp, dtype=np.int32)
+            drawing = cv2.fillPoly(mask, mp, color=255)
+
+    else:
+        mask_point = np.array(mask_points, dtype=np.int32)
+        drawing = cv2.fillPoly(mask, mask_point, color=255)
+
+    return drawing
+
+
+def convert_cvs_data_to_imgs(base_directory, csv_file_dir='', directory_imgs='', output_directory='masks'):
+
+    """
+    Given a directory looks for a csv vile and the images in it's corresponding images.
+    The default directory to look for images in "images" inside the base directory, it can be customized with its respective flag.
+    The csv file should be in VGG annotator format.
+    The masks are saved in png format. A folder "masks" is created if it doesn't exists.
+
+    :param base_directory: (str)
+    :param csv_file_dir: (str)
+    :param directory_imgs: (str)
+    :param output_directory: (str)
+    :return:
+    """
+    if output_directory == 'masks':
+        output_directory = base_directory + 'masks'
+
+    # check the output directory exists
+    if not(os.path.isdir(output_directory)):
+        os.mkdir(output_directory)
+
+    if directory_imgs == '':
+        directory_imgs = base_directory + '/images/'
+
+    list_images = [file for file in os.listdir(directory_imgs) if file.endswith('.png')]
+    if csv_file_dir == '':
+        csv_file = [f for f in os.listdir(base_directory) if f.endswith('.csv')][0]
+        csv_file_dir = base_directory + csv_file
+
+    data_frame = pd.read_csv(csv_file_dir)
+    list_name_imgs = data_frame['filename'].tolist()
+    list_points = data_frame['region_shape_attributes'].tolist()
+    for img in list_images:
+        print('img:', img)
+        if img in list_name_imgs:
+            indexes = [i for i, element in enumerate(list_name_imgs) if element == img]
+            contours = []
+            for index in indexes:
+                list_points[index]
+                res = ast.literal_eval(list_points[index])
+                if res!= {}:
+                    points_x = res.get('all_points_x')
+                    points_y = res.get('all_points_y')
+                    contour = []
+                    for i, x in enumerate(points_x):
+                        contour.append([[x, points_y[i]]])
+                        array_contour = np.array(contour, dtype=np.int32)
+
+                    contours.append(array_contour)
+                    image = cv2.imread(directory_imgs + img)
+                    mask = generate_mask_from_points(image, contours)
+                    mask_name = ''.join([output_directory, '/', img])
+                    cv2.imwrite(mask_name, mask)
+        else:
+            mask = np.zeros(np.shape(img))
+            cv2.imwrite(''.join([output_directory, '/', img]), mask)
 
 def discrepancies(file_1, file_2):
     """
