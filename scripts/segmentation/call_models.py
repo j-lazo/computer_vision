@@ -169,9 +169,13 @@ def dice_coef(y_true, y_pred, empty_score=1):
     intersection = K.sum(y_true * y_pred, axis=[1, 2, 3])
     union = K.sum(y_true, axis=[1, 2, 3]) + K.sum(y_pred, axis=[1, 2, 3])
 
-    if union == 0:
-        return empty_score
+    #if union == 0:
+    #    x = tf.constant(empty_score, dtype=tf.float32)
+    #    print(x)
+    #    return x
 
+    print(type(K.mean((2. * intersection) / (union), axis=0)))
+    print(K.mean((2. * intersection) / (union), axis=0))
     return K.mean((2. * intersection) / (union), axis=0)
 
 
@@ -584,7 +588,7 @@ def save_plots(model_history, results_directory, new_results_id):
     print('Plots of the history saved at: results_directory')
 
 
-def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=500, prediction_folder=''):
+def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, prediction_folder=''):
 
     if mode == 'train':
         # optimizer:
@@ -773,6 +777,7 @@ def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=500, 
 if __name__ == "__main__":
 
     project_folder = ''
+    mode = 'train'
     name_models = ['residual_unet']
     # Hyper-parameters:
     batches = [32, 16, 8, 4]
