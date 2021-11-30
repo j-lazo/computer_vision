@@ -165,10 +165,14 @@ def iou(y_true, y_pred, smooth=1e-15):
     return tf.numpy_function(f, [y_true, y_pred], tf.float32)
 
 
-def dice_coef(y_true, y_pred, smooth=1):
+def dice_coef(y_true, y_pred, empty_score=1):
     intersection = K.sum(y_true * y_pred, axis=[1, 2, 3])
     union = K.sum(y_true, axis=[1, 2, 3]) + K.sum(y_pred, axis=[1, 2, 3])
-    return K.mean((2. * intersection + smooth) / (union + smooth), axis=0)
+
+    if union == 0:
+        return empty_score
+
+    return K.mean((2. * intersection) / (union), axis=0)
 
 
 def dice_coef_loss(y_true, y_pred):
