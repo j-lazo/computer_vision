@@ -20,7 +20,19 @@ from sklearn.metrics import average_precision_score
 from sklearn.metrics import recall_score
 from sklearn.metrics import accuracy_score
 import datetime
+import tqdm
 
+def load_model(project_folder, name_model):
+    results_directory = ''.join([project_folder, 'results/', name_model, '/'])
+    name_model = ''.join([results_directory, name_model, '_model.h5'])
+    print('MODEL USED:')
+    print(name_model)
+    model = tf.keras.models.load_model(name_model,
+                                       custom_objects={'loss': dice_coef_loss},
+                                       compile=False)
+    input_size = (len(model.layers[0].output_shape[0])) - 1
+
+    return model, input_size
 
 def load_data(path, image_modality):
     path_images = ''.join([path, "images/*"])
@@ -568,152 +580,190 @@ def save_plots(model_history, results_directory, new_results_id):
     print('Plots of the history saved at: results_directory')
 
 
-def call_model(project_folder, name_model, batch, lr, epochs=500):
-    # optimizer:
-    opt = tf.keras.optimizers.Adam(lr)
+def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=500, prediction_folder=''):
 
-    # image modality of the data
-    image_modality = 'rgb'
-    augmented = False
-    if augmented is True:
-        amount_data = '/'
+    if mode == 'train':
+        # optimizer:
+        opt = tf.keras.optimizers.Adam(lr)
+
+        # image modality of the data
+        image_modality = 'rgb'
+        augmented = False
+        if augmented is True:
+            amount_data = '/'
+        else:
+            amount_data = '/'
+
+        # Define training and validation data
+        train_data_used = ''.join([project_folder, 'dataset/train/'])
+        val_data_used = ''.join([project_folder, 'dataset/val/'])
+
+        if name_model == 'continuous_blocks_ResUnet':
+            image_modality = 'npy'
+            # amount_data = '/original_data/'
+            train_data_used = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
+                                       'train'])
+            val_data_used = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
+                                     'val'])
+        elif name_model == 'simple_ensemble' or name_model == 'ensemble':
+            image_modality = 'ensemble'
+            # amount_data = '/original_data/'
+            train_data_used = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
+                                       'train'])
+            val_data_used = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
+                                     'val'])
+
+        (train_x, train_y) = load_data(train_data_used, image_modality)
+        print('Data training: ', train_data_used)
+
+        (valid_x, valid_y) = load_data(val_data_used, image_modality)
+        print('Data validation: ', val_data_used)
+
+        train_dataset = tf_dataset(train_x, train_y, batch=batch,
+                                   img_modality=image_modality)
+        valid_dataset = tf_dataset(valid_x, valid_y, batch=batch,
+                                   img_modality=image_modality)
+
+        # metrics list:
+        metrics = ["acc", tf.keras.metrics.Recall(),
+                   tf.keras.metrics.Precision(), dice_coef, iou]
+
+        model = build_model(name_model)
+        model.summary()
+        model.compile(optimizer=opt, loss=dice_coef_loss, metrics=metrics)
+        training_starting_time = datetime.datetime.now()
+
+        # determine if also perform analysis of the training and validation dataset
+        analyze_validation_set = False
+        evaluate_train_dir = False
+        # ID name for the folder and results
+
+        new_results_id = ''.join([name_model,
+                                  '_lr_',
+                                  str(lr),
+                                  '_bs_',
+                                  str(batch),
+                                  '_', image_modality, '_',
+                                  training_starting_time.strftime("%d_%m_%Y_%H_%M"),
+                                  ])
+        results_directory = ''.join([project_folder, 'results/', name_model,
+                                     '/', new_results_id, '/'])
+        # if results directory doesn't exists create it
+        if not os.path.isdir(results_directory):
+            os.mkdir(results_directory)
+
+        callbacks = [
+            ModelCheckpoint(results_directory + new_results_id + "_model.h5"),
+            ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=10),
+            CSVLogger(results_directory + new_results_id + "_data.csv"),
+            TensorBoard(),
+            EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)]
+
+        train_steps = len(train_x) // batch
+        valid_steps = len(valid_x) // batch
+
+        if len(train_x) % batch != 0:
+            train_steps += 1
+        if len(valid_x) % batch != 0:
+            valid_steps += 1
+
+        start_time = datetime.datetime.now()
+
+        # Train the network
+        model_history = model.fit(train_dataset,
+                                  validation_data=valid_dataset,
+                                  epochs=epochs,
+                                  steps_per_epoch=train_steps,
+                                  validation_steps=valid_steps,
+                                  callbacks=callbacks)
+        # save the model
+        model.save(results_directory + new_results_id + '_model')
+        print('Total Training TIME:', (datetime.datetime.now() - start_time))
+        print('METRICS Considered:')
+        print(model_history.history.keys())
+
+        name_performance_metrics_file = ''.join([results_directory,
+                                                 'performance_metrics_',
+                                                 training_starting_time.strftime("%d_%m_%Y_%H_%M"),
+                                                 '_.csv'])
+
+        save_history(name_performance_metrics_file, model_history)
+        save_plots(model_history, results_directory, new_results_id)
+        # make directory for the predictions
+        os.mkdir(results_directory + 'predictions/')
+        # Evaluate and predict in the test dataset(s)
+        list_of_test_sets = sorted(os.listdir(project_folder + 'dataset/test/'))
+
+        for folder in list_of_test_sets:
+            names_csv_files = []
+            os.mkdir(''.join([results_directory, 'predictions/', folder, '/']))
+            if image_modality == 'npy' or image_modality == 'ensemble':
+                evaluation_directory = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
+                                                'test/', folder, '/'])
+            else:
+                evaluation_directory = ''.join([project_folder, 'dataset/test/', folder, '/'])
+            name_test_csv_file = evaluate_and_predict(model, evaluation_directory,
+                                                      image_modality,
+                                                      results_directory, folder, new_results_id)
+            names_csv_files.append(name_test_csv_file)
+
+        if analyze_validation_set is True:
+            os.mkdir(results_directory + 'predictions/val/')
+            if image_modality == 'npy' or image_modality == 'ensemble':
+                evaluation_directory = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
+                                                'val/original_data/'])
+            else:
+                evaluation_directory_val = project_folder + "val/original_data/"
+            name_test_csv_file = evaluate_and_predict(model, evaluation_directory_val,
+                                                      image_modality, results_directory,
+                                                      'val', new_results_id)
+
+        if evaluate_train_dir is True:
+            os.mkdir(results_directory + 'predictions/train/')
+            if image_modality == 'npy' or image_modality == 'ensemble':
+                evaluation_directory = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
+                                                'train/original_data/'])
+            else:
+                evaluation_directory_val = project_folder + "train/original_data/"
+            name_test_csv_file = evaluate_and_predict(model, evaluation_directory_val,
+                                                      image_modality, results_directory,
+                                                      'train', new_results_id)
+
+    elif mode == 'predict':
+        # load the model
+        model, input_size = load_model(project_folder, name_model)
+        # obtain the input shape of the model
+        input_layer_shape = model.layers[0].input_shape
+        shape_input = np.shape(input_layer_shape)
+
+        output_directory = ''.join([project_folder, 'results/', name_model, '/predictions/val'])
+        if not os.path.isdir(output_directory):
+            os.mkdir(output_directory)
+
+        if shape_input[-1] == 4:
+            input_size_x = input_layer_shape[0][1]
+            input_size_y = input_layer_shape[0][2]
+
+        list_imgs = [f for f in os.listdir(prediction_folder) if f.endswith('.png')]
+        for i, input_img in enumerate(tqdm.tqdm(list_imgs, desc='Reading images')):
+            # reshape the input frame to be compatible with the input of the network
+            directory_image = prediction_folder + input_img
+            input_image = cv2.imread(directory_image)
+            reshaped_img = cv2.resize(input_image, (input_size_x, input_size_y),
+                                      interpolation=cv2.INTER_AREA) /255
+            # normalize the image
+            predicted_mask = model.predict(np.expand_dims(reshaped_img, axis=0))[0] >= 0.5
+            name_original_file = directory_image.replace(''.join([prediction_folder, 'images/']), '')
+
+
+            results_name = ''.join([output_directory, '/', input_img])
+            cv2.imwrite(results_name, predicted_mask * 255.0)
+            # save the results of the test dataset in a CSV file
+
+
+
     else:
-        amount_data = '/'
-
-    # Define training and validation data
-    train_data_used = ''.join([project_folder, 'dataset/train/'])
-    val_data_used = ''.join([project_folder, 'dataset/val/'])
-
-    if name_model == 'continuous_blocks_ResUnet':
-        image_modality = 'npy'
-        #amount_data = '/original_data/'
-        train_data_used = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
-                                   'train'])
-        val_data_used = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
-                                 'val'])
-    elif name_model == 'simple_ensemble' or name_model == 'ensemble':
-        image_modality = 'ensemble'
-        #amount_data = '/original_data/'
-        train_data_used = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
-                                   'train'])
-        val_data_used = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
-                                 'val'])
-
-    (train_x, train_y) = load_data(train_data_used, image_modality)
-    print('Data training: ', train_data_used)
-
-    (valid_x, valid_y) = load_data(val_data_used, image_modality)
-    print('Data validation: ', val_data_used)
-
-    train_dataset = tf_dataset(train_x, train_y, batch=batch,
-                               img_modality=image_modality)
-    valid_dataset = tf_dataset(valid_x, valid_y, batch=batch,
-                               img_modality=image_modality)
-
-    # metrics list:
-    metrics = ["acc", tf.keras.metrics.Recall(),
-               tf.keras.metrics.Precision(), dice_coef, iou]
-
-    model = build_model(name_model)
-    model.summary()
-    model.compile(optimizer=opt, loss=dice_coef_loss, metrics=metrics)
-    training_starting_time = datetime.datetime.now()
-
-    # determine if also perform analysis of the training and validation dataset
-    analyze_validation_set = False
-    evaluate_train_dir = False
-    # ID name for the folder and results
-
-    new_results_id = ''.join([name_model,
-                              '_lr_',
-                              str(lr),
-                              '_bs_',
-                              str(batch),
-                              '_', image_modality, '_',
-                              training_starting_time.strftime("%d_%m_%Y_%H_%M"),
-                              ])
-    results_directory = ''.join([project_folder, 'results/', name_model,
-                                 '/', new_results_id, '/'])
-    # if results directory doesn't exists create it
-    if not os.path.isdir(results_directory):
-        os.mkdir(results_directory)
-
-    callbacks = [
-        ModelCheckpoint(results_directory + new_results_id + "_model.h5"),
-        ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=10),
-        CSVLogger(results_directory + new_results_id + "_data.csv"),
-        TensorBoard(),
-        EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)]
-
-    train_steps = len(train_x) // batch
-    valid_steps = len(valid_x) // batch
-
-    if len(train_x) % batch != 0:
-        train_steps += 1
-    if len(valid_x) % batch != 0:
-        valid_steps += 1
-
-    start_time = datetime.datetime.now()
-
-    # Train the network
-    model_history = model.fit(train_dataset,
-                              validation_data=valid_dataset,
-                              epochs=epochs,
-                              steps_per_epoch=train_steps,
-                              validation_steps=valid_steps,
-                              callbacks=callbacks)
-    # save the model
-    model.save(results_directory + new_results_id + '_model')
-    print('Total Training TIME:', (datetime.datetime.now() - start_time))
-    print('METRICS Considered:')
-    print(model_history.history.keys())
-
-    name_performance_metrics_file = ''.join([results_directory,
-                                             'performance_metrics_',
-                                             training_starting_time.strftime("%d_%m_%Y_%H_%M"),
-                                             '_.csv'])
-
-    save_history(name_performance_metrics_file, model_history)
-    save_plots(model_history, results_directory, new_results_id)
-    # make directory for the predictions
-    os.mkdir(results_directory + 'predictions/')
-    # Evaluate and predict in the test dataset(s)
-    list_of_test_sets = sorted(os.listdir(project_folder + 'dataset/test/'))
-
-    for folder in list_of_test_sets:
-        names_csv_files = []
-        os.mkdir(''.join([results_directory, 'predictions/', folder, '/']))
-        if image_modality == 'npy' or image_modality == 'ensemble':
-            evaluation_directory = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
-                                       'test/', folder, '/'])
-        else:
-            evaluation_directory = ''.join([project_folder, 'dataset/test/', folder, '/'])
-        name_test_csv_file = evaluate_and_predict(model, evaluation_directory,
-                                                  image_modality,
-                                                  results_directory, folder, new_results_id)
-        names_csv_files.append(name_test_csv_file)
-
-    if analyze_validation_set is True:
-        os.mkdir(results_directory + 'predictions/val/')
-        if image_modality == 'npy' or image_modality == 'ensemble':
-            evaluation_directory = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
-                                            'val/original_data/'])
-        else:
-            evaluation_directory_val = project_folder + "val/original_data/"
-        name_test_csv_file = evaluate_and_predict(model, evaluation_directory_val,
-                                                    image_modality, results_directory,
-                                                  'val', new_results_id)
-
-    if evaluate_train_dir is True:
-        os.mkdir(results_directory + 'predictions/train/')
-        if image_modality == 'npy' or image_modality == 'ensemble':
-            evaluation_directory = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
-                                            'train/original_data/'])
-        else:
-            evaluation_directory_val = project_folder + "train/original_data/"
-        name_test_csv_file = evaluate_and_predict(model, evaluation_directory_val,
-                                                  image_modality, results_directory,
-                                                  'train', new_results_id)
+        print(f'mode: {mode} not understood, optrions: train, predict')
 
 
 if __name__ == "__main__":
@@ -726,7 +776,7 @@ if __name__ == "__main__":
     for name_model in name_models:
         for batch in batches:
             for lr in learing_rates:
-                call_model(project_folder, name_model, batch, lr)
+                call_model(mode, project_folder, name_model, batch, lr)
 
 
 
