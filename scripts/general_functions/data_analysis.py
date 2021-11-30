@@ -7,21 +7,29 @@ import scipy.io
 import numpy as np
 import cv2
 import tqdm
+from sklearn.metrics import average_precision_score
+from sklearn.metrics import recall_score
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_score
 import pandas as pd
+import seaborn as sns
+import datetime
+import glob
+
 import ast
 import shutil
 import random
 
-flags.DEFINE_string('directory', '', 'name of the model')
-flags.DEFINE_list('sub_directories', [], 'train or predict')
-flags.DEFINE_string('', '', 'backbone network')
-
 
 def read_mask(dir_image):
+    """
+    :param dir_image:
+    :return:
+    """
     original_img = cv2.imread(dir_image)
 
     if original_img is None:
-        print('Could not open or find the image:', args.input)
+        print('Could not open or find the image:', dir_image)
         exit(0)
 
     height, width, depth = original_img.shape
@@ -32,7 +40,11 @@ def read_mask(dir_image):
 
 
 def read_img_results(dir_image):
-    print(dir_image)
+    """
+
+    :param dir_image:
+    :return:
+    """
     original_img = cv2.imread(dir_image)
 
     if original_img is None:
@@ -45,74 +57,87 @@ def read_img_results(dir_image):
     return img
 
 
-def read_results_csv_plot(file_path):
-    dice_values = []
-    with open(file_path, 'r') as file:
-        reader = csv.reader(file)
-        for row in reader:
-            dice_values.append([row[1], row[2]])
+def compare_box_plots(general_directory = '', name_test_csv_file='', name_validation_csv_file='',
+                      save_directory='', condition_name=''):
 
-        return dice_values
+    predictions_path = ''.join([general_directory, 'predictions'])
+    prediction_folders = sorted([f for f in os.listdir(predictions_path)])
+    file_names = []
+    dsc_values = {}
+    prec_values = {}
+    rec_values = {}
+    acc_values = {}
+    if general_directory != '' and type(general_directory) == str:
+        csv_files = sorted([f for f in os.listdir(general_directory) if 'evaluation_results' in f and f.endswith('.csv')])
+        count_id = 0
+        for i, folder in enumerate(prediction_folders):
+            if folder in csv_files[i]:
+                file_names.append(folder)
+            else:
+                file_names.append('dataset_'+str(count_id))
+                count_id =+1
+            data_file = pd.read_csv(general_directory + csv_files[i])
+            dsc_values[file_names[i]] = data_file['DSC'].tolist()
+            prec_values[file_names[i]] = data_file['Precision'].tolist()
+            rec_values[file_names[i]] = data_file['Recall'].tolist()
+            acc_values[file_names[i]] = data_file['Accuracy'].tolist()
 
+    else:
+        pass
 
-def read_results_csv(file_path, row_id=0):
-    dice_values = []
-    with open(file_path, 'r') as file:
-        reader = csv.reader(file)
-        for row in reader:
-            dice_values.append(float(row[row_id]))
+    dsc_data = pd.DataFrame.from_dict(dsc_values, orient='index').T
+    prec_data = pd.DataFrame.from_dict(prec_values, orient='index').T
+    rec_data = pd.DataFrame.from_dict(rec_values, orient='index').T
+    acc_data = pd.DataFrame.from_dict(acc_values, orient='index').T
 
-        return dice_values
+    # build the image to plot
 
+    fig1 = plt.figure(1, figsize=(11,7))
+    ax1 = fig1.add_subplot(221)
+    ax1 = sns.boxplot(data=dsc_data)
+    ax1 = sns.swarmplot(data=dsc_data, color=".25")
+    ax1.set_ylim([0, 1.0])
+    ax1.title.set_text('$DSC$')
 
-def print_box_plots(name_test_csv_file, name_validation_csv_file, save_directory):
-    path_file_1 = name_test_csv_file
-    path_file_2 = name_validation_csv_file
+    ax2 = fig1.add_subplot(222)
+    ax2 = sns.boxplot(data=prec_data)
+    ax2 = sns.swarmplot(data=prec_data, color=".25")
+    ax1.set_ylim([0, 1.0])
+    ax2.title.set_text('$PREC$')
 
-    list_dice_values_file_1 = read_results_csv(path_file_1, 2)
-    list_dice_values_file_2 = read_results_csv(path_file_2, 2)
-    data_dice = [list_dice_values_file_1, list_dice_values_file_2]
+    ax3 = fig1.add_subplot(223)
+    ax3 = sns.boxplot(data=rec_data)
+    ax3 = sns.swarmplot(data=rec_data, color=".25")
+    ax1.set_ylim([0, 1.0])
+    ax3.title.set_text('$REC$')
 
-    list_precision_values_file_1 = read_results_csv(path_file_1, 3)
-    list_precision_values_file_2 = read_results_csv(path_file_2, 3)
-    data_precision_values = [list_precision_values_file_1, list_precision_values_file_2]
+    ax4 = fig1.add_subplot(224)
+    ax4 = sns.boxplot(data=acc_data)
+    ax4 = sns.swarmplot(data=acc_data, color=".25")
+    ax1.set_ylim([0, 1.0])
+    ax4.title.set_text('$ACC$')
 
-    list_recall_file_1 = read_results_csv(path_file_1, 4)
-    list_recall_file_2 = read_results_csv(path_file_2, 4)
-    data_recall = [list_recall_file_1, list_recall_file_2]
+    #plt.show()
+    if save_directory == '':
+        save_directory = general_directory
 
-    fig1 = plt.figure(1)
-    ax1 = fig1.add_subplot(131)
-    ax1.boxplot(data_dice[0], 1, 'gD')
-    ax2 = fig1.add_subplot(132)
-    ax2.boxplot(data_precision_values[0], 1, 'gD')
-    ax3 = fig1.add_subplot(133)
-    ax3.boxplot(data_recall[0], 1, 'gD')
-    ax1.title.set_text('Dice Coeff')
-    ax2.title.set_text('Precision')
-    ax3.title.set_text('Recall')
-    ax1.set_ylim(0, 1)
-    ax2.set_ylim(0, 1)
-    ax3.set_ylim(0, 1)
+        date_analysis = datetime.datetime.now()
 
-    plt.savefig(save_directory + 'results_test.png')
+    # ID name for the plot results
+    plot_save_name = ''.join([save_directory + 'boxplots_results_',
+                              date_analysis.strftime("%d_%m_%Y_%H_%M"),
+                              '_.png'])
+
+    plt.savefig(plot_save_name)
     plt.close()
+    text_file_name = ''.join([save_directory + 'data_used_boxplots',
+                              date_analysis.strftime("%d_%m_%Y_%H_%M"),
+                              '_.txt'])
 
-    fig2 = plt.figure(2)
-    ax1 = fig2.add_subplot(131)
-    ax1.boxplot(data_dice[1], 1, 'gD')
-    ax2 = fig2.add_subplot(132)
-    ax2.boxplot(data_precision_values[1], 1, 'gD')
-    ax3 = fig2.add_subplot(133)
-    ax3.boxplot(data_recall[1], 1, 'gD')
-    ax1.title.set_text('Dice Coeff')
-    ax2.title.set_text('Precision')
-    ax3.title.set_text('Recall')
-    ax1.set_ylim(0, 1)
-    ax2.set_ylim(0, 1)
-    ax3.set_ylim(0, 1)
-    plt.savefig(save_directory + 'results_val.png')
-    plt.close()
+    textfile = open(text_file_name, "w")
+    np.savetxt(textfile, csv_files, delimiter="\n", fmt="%s")
+    textfile.close()
+
 
 
 def get_confusion_matrix_intersection_mats(groundtruth, predicted):
@@ -169,9 +194,9 @@ def get_confusion_matrix_overlaid_mask(image, groundtruth, predicted, alpha, col
     return color_mask.astype(np.float32)  # cv2.addWeighted(image, 0.1, color_mask, 0.5, 0)
 
 
-def compare_results(dir_groundtruth, dir_predictions, dir_csv_file, save_directory):
-    path_images_folder = dir_groundtruth + 'image/rgb/'
-    path_masks_folder = dir_groundtruth + 'label/'
+def compare_results_overlay(dir_groundtruth, dir_predictions, dir_csv_file, save_directory):
+    path_images_folder = dir_groundtruth + 'images/'
+    path_masks_folder = dir_groundtruth + 'masks/'
     list_dice_values = read_results_csv_plot(dir_csv_file)
 
     image_list = [f for f in os.listdir(path_images_folder) if os.path.isfile(os.pathjoin(path_images_folder, f))]
@@ -209,6 +234,10 @@ def compare_results(dir_groundtruth, dir_predictions, dir_csv_file, save_directo
 
                     my_dpi = 96
 
+                    # Use the one bellow
+                    #fig = plt.figure()
+                    #ax1 = fig1.add_subplot(131)
+
                     plt.figure(3, figsize=(640 / my_dpi, 480 / my_dpi), dpi=my_dpi)
 
                     plt.subplot(141)
@@ -235,8 +264,190 @@ def compare_results(dir_groundtruth, dir_predictions, dir_csv_file, save_directo
                     plt.close()
 
 
+def dice(im1, im2, empty_score=1.0):
+    """
+    Computes the Dice coefficient, a measure of set similarity.
+    Parameters
+    ----------
+    im1 : array-like, bool
+        Any array of arbitrary size. If not boolean, will be converted.
+    im2 : array-like, bool
+        Any other array of identical size. If not boolean, will be converted.
+    Returns
+    -------
+    dice : float
+        Dice coefficient as a float on range [0,1].
+        Maximum similarity = 1
+        No similarity = 0
+        Both are empty (sum eq to zero) = empty_score
+
+    Notes
+    -----
+    The order of inputs for `dice` is irrelevant. The result will be
+    identical if `im1` and `im2` are switched.
+    """
+    im1 = np.asarray(im1).astype(np.bool)
+    im2 = np.asarray(im2).astype(np.bool)
+
+    if im1.shape != im2.shape:
+        raise ValueError("Shape mismatch: im1 and im2 must have the same shape.")
+
+    im_sum = im1.sum() + im2.sum()
+    if im_sum == 0:
+        return empty_score
+
+    # Compute Dice coefficient
+    intersection = np.logical_and(im1, im2)
+
+    return 2. * intersection.sum() / im_sum
+
+
+def calculate_rates(image_1, image_2):
+
+    """
+    Takes two black and white images and calculates recall, precision,
+    average precision  and accuracy
+    :param image_1: array
+    :param image_2: array
+    :return: list with the values of precision, recall, average precision and accuracy
+    """
+
+    image_1 = np.asarray(image_1).astype(np.bool)
+    image_2 = np.asarray(image_2).astype(np.bool)
+    image_1 = image_1.flatten()
+    image_2 = image_2.flatten()
+
+    if image_1.shape != image_2.shape:
+        raise ValueError("Shape mismatch: im1 and im2 must have the same shape.")
+
+    accuracy_value = accuracy_score(image_1, image_2)
+
+    if (np.unique(image_1) == [False]).all() and (np.unique(image_1) == [False]).all():
+        recall_value = 1.
+        precision_value = 1.
+        average_precision = 1.
+
+    else:
+        recall_value = recall_score(image_1, image_2)
+        precision_value = precision_score(image_1, image_2)
+        average_precision = average_precision_score(image_1, image_2)
+
+    return precision_value, recall_value, average_precision, accuracy_value
+
+
+def calculate_performance(dir_results, dir_groundtruth):
+
+    """
+    Calculate the performance metrics given two directories with results dataset and ground truth dataset
+    The performance metrics calculated are: Dice Coefficient, Precision, Recall, Average Precision and
+    Accuracy.
+    :param dir_results: Directory of the results images
+    :param dir_groundtruth: Directory of the ground truth images
+    :return: Pandas Dataframe with the image name and the metrics
+    """
+
+    imgs_name = []
+    dice_values = []
+    precision_values = []
+    recall_values = []
+    avg_precision_values = []
+    accuracy_values = []
+
+    img_list_results = sorted([file for file in os.listdir(dir_results) if file.endswith('.png')])
+    img_groundtruth = sorted([file for file in os.listdir(dir_groundtruth) if file.endswith('.png')])
+
+    for i, image in enumerate(tqdm.tqdm(img_list_results, desc=f'Analyzing {len(img_list_results)} images')):
+        if image in img_groundtruth:
+            img1 = read_img_results(''.join([dir_results, '/', image]))
+            img2 = read_img_results(dir_groundtruth + image)
+            imgs_name.append(image)
+            dice_values.append(dice(img1, img2))
+            precision, recall, average_precision, accuracy = calculate_rates(img1, img2)
+            precision_values.append(precision)
+            recall_values.append(recall)
+            avg_precision_values.append(average_precision)
+            accuracy_values.append(accuracy)
+
+    data_results = pd.DataFrame(np.array([imgs_name, dice_values, precision_values, recall_values,
+                                  avg_precision_values, accuracy_values]).T,
+                        columns=['Image', 'DSC', 'Precision', 'Recall', 'Avg. Precision', 'Accuracy'])
+
+    return data_results
+
+
+def analyze_performances(project_dir):
+
+    """
+    Analyze the performance of a directory or a list of directories
+    :param project_dir:
+    :return:
+    """
+    # 2DO: recognize directory or list
+
+    results_list = os.listdir(project_dir + 'results/')
+    results_list.remove('temp')
+    for experiment_id in results_list:
+        print(experiment_id)
+        folders_prediction = os.listdir(os.path.join(project_dir, 'results', experiment_id, 'predictions'))
+
+        for folder in folders_prediction:
+            dir_results = os.path.join(project_dir, 'results', experiment_id, 'predictions', folder)
+            dir_gt = os.path.join(project_dir, 'dataset', folder, 'masks/')
+
+            if os.path.isdir(dir_gt):
+                results_data = calculate_performance(dir_results, dir_gt)
+                name_results_file = ''.join([project_dir, 'results/', experiment_id, '/',
+                                             'evaluation_results_', folder, '_',experiment_id, '_.csv'])
+
+                results_data.to_csv(name_results_file)
+                print(f"results saved at: {name_results_file}")
+            else:
+                print(f' folder: {dir_gt} not found')
+
+
+def save_boxlplots(project_dir):
+    """
+    given a folder with results it saves the boxplots of the datasets were inferences were made
+    you need to have inside your directory a folder "predictions" and the csv files with the precitions
+    for each of folder(s)
+    :param project_dir: (str) directory to analyze
+    :return:
+    """
+
+    if type(project_dir) == str:
+        print(project_dir)
+        #olders_prediction = os.listdir(os.path.join(project_dir, 'results', experiment_id, 'predictions'))
+        compare_box_plots(project_dir)
+
+
+    elif type(project_dir) == list:
+        results_list = os.listdir(project_dir + 'results/')
+        results_list.remove('temp')
+        for experiment_id in results_list:
+            print(experiment_id)
+            folders_prediction = os.listdir(os.path.join(project_dir, 'results', experiment_id, 'predictions'))
+
+            for folder in folders_prediction:
+                dir_results = os.path.join(project_dir, 'results', experiment_id, 'predictions', folder)
+                dir_gt = os.path.join(project_dir, 'dataset', folder, 'masks/')
+
+                if os.path.isdir(dir_gt):
+                    results_data = calculate_performance(dir_results, dir_gt)
+                    name_results_file = ''.join([project_dir, 'results/', experiment_id, '/',
+                                                 'evaluation_results_', folder, '_',experiment_id, '_.csv'])
+
+                    results_data.to_csv(name_results_file)
+                    print(f"results saved at: {name_results_file}")
+                else:
+                    print(f' folder: {dir_gt} not found')
+    else:
+        print('type(project dir) not understood')
+
+
+
 if __name__ == '__main__':
-    try:
-        app.run(analyze_data)
-    except SystemExit:
-        pass
+    pass
+    #try:
+    #    app.run(analyze_data)
+    #except SystemExit:
+    #    pass
