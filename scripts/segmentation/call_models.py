@@ -3,7 +3,6 @@ import numpy as np
 import cv2
 from glob import glob
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
-from tqdm import tqdm
 import tensorflow as tf
 import keras.backend as K
 from tensorflow.keras.layers import *
@@ -174,8 +173,8 @@ def dice_coef(y_true, y_pred, empty_score=1):
     #    print(x)
     #    return x
 
-    print(type(K.mean((2. * intersection) / (union), axis=0)))
-    print(K.mean((2. * intersection) / (union), axis=0))
+    #print(type(K.mean((2. * intersection) / (union), axis=0)))
+    #print(K.mean((2. * intersection) / (union), axis=0))
     return K.mean((2. * intersection) / (union), axis=0)
 
 
@@ -384,7 +383,7 @@ def evaluate_and_predict(model, directory_to_evaluate,
     # evaluate the model in the test dataset
     model.evaluate(test_dataset, steps=test_steps)
     times = []
-    for i, (x, y) in tqdm(enumerate(zip(test_x, test_y)), total=len(test_x)):
+    for i, (x, y) in tqdm.tqdm(enumerate(zip(test_x, test_y)), total=len(test_x)):
         directory_image = x
         init_time = time.time()
         x = read_image_test(x, image_modality)
@@ -560,7 +559,7 @@ def save_plots(model_history, results_directory, new_results_id):
     plt.ylabel('DSC')
     plt.xlabel('epoch')
     plt.legend(['train', 'val'], loc='upper left')
-    plt.savefig(''.join([results_directory, 'DSC_history_', new_results_id, '_.svg']))
+    plt.savefig(''.join([results_directory, 'DSC_history_', new_results_id, '_.png']))
     plt.close()
 
     # summarize history for accuracy
@@ -571,7 +570,7 @@ def save_plots(model_history, results_directory, new_results_id):
     plt.ylabel('accuracy')
     plt.xlabel('epoch')
     plt.legend(['train', 'val'], loc='upper left')
-    plt.savefig(''.join([results_directory, 'Accuracy_history_', new_results_id, '_.svg']))
+    plt.savefig(''.join([results_directory, 'Accuracy_history_', new_results_id, '_.png']))
     plt.close()
 
     # summarize history for loss
@@ -582,7 +581,7 @@ def save_plots(model_history, results_directory, new_results_id):
     plt.ylabel('DSC loss')
     plt.xlabel('epoch')
     plt.legend(['train', 'valtest'], loc='upper left')
-    plt.savefig(''.join([results_directory, 'DSC_loss_history_', new_results_id, '_.svg']))
+    plt.savefig(''.join([results_directory, 'DSC_loss_history_', new_results_id, '_.png']))
     plt.close()
 
     print('Plots of the history saved at: results_directory')
@@ -662,10 +661,10 @@ def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, 
 
         callbacks = [
             ModelCheckpoint(results_directory + new_results_id + "_model.h5"),
-            ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=10),
+            ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=90),
             CSVLogger(results_directory + new_results_id + "_data.csv"),
             TensorBoard(),
-            EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)]
+            EarlyStopping(monitor='val_loss', patience=90, restore_best_weights=True)]
 
         train_steps = len(train_x) // batch
         valid_steps = len(valid_x) // batch
