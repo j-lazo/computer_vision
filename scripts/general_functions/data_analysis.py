@@ -15,7 +15,6 @@ import pandas as pd
 import seaborn as sns
 import datetime
 import glob
-
 import ast
 import shutil
 import random
@@ -59,6 +58,16 @@ def read_img_results(dir_image):
 
 def compare_box_plots(general_directory = '', name_test_csv_file='', name_validation_csv_file='',
                       save_directory='', condition_name=''):
+    """
+
+    :param general_directory:
+    :param name_test_csv_file:
+    :param name_validation_csv_file:
+    :param save_directory:
+    :param condition_name:
+    :return:
+    2DO: Handle list of dirs and exclusion conditions
+    """
 
     predictions_path = ''.join([general_directory, 'predictions'])
     prediction_folders = sorted([f for f in os.listdir(predictions_path)])
@@ -194,17 +203,18 @@ def get_confusion_matrix_overlaid_mask(image, groundtruth, predicted, alpha, col
     return color_mask.astype(np.float32)  # cv2.addWeighted(image, 0.1, color_mask, 0.5, 0)
 
 
-def compare_results_overlay(dir_groundtruth, dir_predictions, dir_csv_file, save_directory):
+def compare_results_overlay(dir_groundtruth, dir_predictions, dir_csv_file, save_directory=''):
     path_images_folder = dir_groundtruth + 'images/'
     path_masks_folder = dir_groundtruth + 'masks/'
-    list_dice_values = read_results_csv_plot(dir_csv_file)
+    data_results = pd.read_csv(dir_csv_file)
+    list_dice_values = data_results['DSC'].tolist()
+    list_imgs_csv = data_results['Image'].tolist()
 
-    image_list = [f for f in os.listdir(path_images_folder) if os.path.isfile(os.pathjoin(path_images_folder, f))]
+    image_list = [f for f in os.listdir(path_images_folder) if os.path.isfile(os.path.join(path_images_folder, f))]
     mask_list = [f for f in os.listdir(path_masks_folder) if os.path.isfile(os.path.join(path_masks_folder, f))]
     predicted_masks = [f for f in os.listdir(dir_predictions) if os.path.isfile(os.path.join(dir_predictions, f))]
 
     for image in predicted_masks[:]:
-
         if image in mask_list:
 
             path_image = ''.join([path_images_folder, image])
@@ -213,11 +223,11 @@ def compare_results_overlay(dir_groundtruth, dir_predictions, dir_csv_file, save
             image_frame = read_img_results(path_image)
             mask_image = read_mask(path_mask)
 
-            for counter, element in enumerate(list_dice_values):
+            for counter, element in enumerate(list_imgs_csv):
 
-                print(element[0])
-                if image == element[0]:
-                    dice_value = float(element[1])
+                print(element)
+                if image == element:
+                    dice_value = float(list_dice_values[counter])
                     predicted_mask = read_mask(path_predicted)
                     dice_value = float("{:.3f}".format(dice_value))
 
@@ -405,9 +415,9 @@ def analyze_performances(project_dir):
                 print(f' folder: {dir_gt} not found')
 
 
-def save_boxlplots(project_dir):
+def save_boxplots(project_dir):
     """
-    given a folder with results it saves the boxplots of the datasets were inferences were made
+    Given a folder with results it saves the boxplots of the datasets were inferences were made
     you need to have inside your directory a folder "predictions" and the csv files with the precitions
     for each of folder(s)
     :param project_dir: (str) directory to analyze
@@ -442,6 +452,72 @@ def save_boxlplots(project_dir):
                     print(f' folder: {dir_gt} not found')
     else:
         print('type(project dir) not understood')
+
+
+def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_results_test_0'], dir_save_results='',
+                        top_results=1.0):
+
+    names_analyzed_files = []
+    dsc_values = {}
+    prec_values = {}
+    rec_values = {}
+    acc_values = {}
+
+    median_dsc = []
+
+    list_experiments = sorted(glob.glob(dir_folder_experiments + '*'))
+
+    for j, dir_experiment in enumerate(list_experiments):
+        for selection in selection_criteria:
+            list_results_files = [f for f in os.listdir(dir_experiment) if selection in f]
+            for results in list_results_files:
+                names_analyzed_files.append(results)
+                data_file = pd.read_csv(os.path.join(dir_experiment, results))
+                dsc_values[results] = data_file['DSC'].tolist()
+                median_dsc.append(np.median(data_file['DSC'].tolist()))
+                prec_values[results] = data_file['Precision'].tolist()
+                rec_values[results] = data_file['Recall'].tolist()
+                acc_values[results] = data_file['Accuracy'].tolist()
+
+    df = pd.DataFrame.from_dict(dsc_values, orient='index').T
+    zipped_results = [(x, y)  for x, y in sorted(zip(median_dsc, names_analyzed_files))]
+    # save x.x% top results in a list
+    top_list = zipped_results[-int(top_results*len(zipped_results)):]
+
+    dsc_data = pd.DataFrame.from_dict(dsc_values, orient='index').T
+    prec_data = pd.DataFrame.from_dict(prec_values, orient='index').T
+    rec_data = pd.DataFrame.from_dict(rec_values, orient='index').T
+    acc_data = pd.DataFrame.from_dict(acc_values, orient='index').T
+
+    # build the image to plot
+
+    fig1 = plt.figure(1, figsize=(11,7))
+    ax1 = fig1.add_subplot(221)
+    ax1 = sns.boxplot(data=dsc_data)
+    #ax1 = sns.swarmplot(data=dsc_data, color=".25")
+    ax1.set_ylim([0, 1.0])
+    ax1.title.set_text('$DSC$')
+
+    ax2 = fig1.add_subplot(222)
+    ax2 = sns.boxplot(data=prec_data)
+    #ax2 = sns.swarmplot(data=prec_data, color=".25")
+    ax1.set_ylim([0, 1.0])
+    ax2.title.set_text('$PREC$')
+
+    ax3 = fig1.add_subplot(223)
+    ax3 = sns.boxplot(data=rec_data)
+    #ax3 = sns.swarmplot(data=rec_data, color=".25")
+    ax1.set_ylim([0, 1.0])
+    ax3.title.set_text('$REC$')
+
+    ax4 = fig1.add_subplot(224)
+    ax4 = sns.boxplot(data=acc_data)
+    #ax4 = sns.swarmplot(data=acc_data, color=".25")
+    ax1.set_ylim([0, 1.0])
+    ax4.title.set_text('$ACC$')
+
+    plt.show()
+
 
 
 
