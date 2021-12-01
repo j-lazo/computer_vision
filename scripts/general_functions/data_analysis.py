@@ -15,6 +15,8 @@ import pandas as pd
 import seaborn as sns
 import datetime
 import glob
+import re
+import string
 import ast
 import shutil
 import random
@@ -454,19 +456,43 @@ def save_boxplots(project_dir):
         print('type(project dir) not understood')
 
 
+def extract_information_from_name(string_name):
+
+    model_name = re.search('evaluation_results_test_0_(.+?)_lr_', string_name).group(1)
+
+    #if 'Residual_Unet' in model_name:
+    #    model_name = 'R-Unet'
+    #elif 'Transpose_Res' in model_name:
+    #    model_name = 'TR-Unet'
+
+    date_experiment = re.search('_rgb_(.+?)_.csv', string_name).group(1)
+    lr = re.search('lr_(.+?)_', string_name).group(1)
+    bs = re.search('bs_(.+?)_', string_name).group(1)
+
+
+    return lr, bs, model_name, date_experiment
+
+
 def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_results_test_0'], dir_save_results='',
                         top_results=1.0):
+    """
+    Compre the DSC, Prec, Rec and ACC of different experiments and save the boxplots comparison
+    :param dir_folder_experiments:
+    :param selection_criteria:
+    :param dir_save_results:
+    :param top_results:
+    :return:
+    """
 
+    date_analysis = datetime.datetime.now()
     names_analyzed_files = []
     dsc_values = {}
     prec_values = {}
     rec_values = {}
     acc_values = {}
-
     median_dsc = []
 
-    list_experiments = sorted(glob.glob(dir_folder_experiments + '*'))
-
+    list_experiments = [dir_folder for dir_folder in sorted(glob.glob(dir_folder_experiments + '*' )) if 'analysis' not in dir_folder or 'temp' not in dir_folder]
     for j, dir_experiment in enumerate(list_experiments):
         for selection in selection_criteria:
             list_results_files = [f for f in os.listdir(dir_experiment) if selection in f]
@@ -479,21 +505,46 @@ def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_
                 rec_values[results] = data_file['Recall'].tolist()
                 acc_values[results] = data_file['Accuracy'].tolist()
 
-    df = pd.DataFrame.from_dict(dsc_values, orient='index').T
-    zipped_results = [(x, y)  for x, y in sorted(zip(median_dsc, names_analyzed_files))]
+    zipped_results = [(x, y)  for x, y in sorted(zip(median_dsc, names_analyzed_files), reverse=True)]
     # save x.x% top results in a list
-    top_list = zipped_results[-int(top_results*len(zipped_results)):]
+    top_list = zipped_results[:int(top_results*len(zipped_results))]
+
+    dsc_values = {pair[1]:dsc_values[pair[1]] for pair in top_list if pair[1] in dsc_values}
+    prec_values = {pair[1]:prec_values[pair[1]] for pair in top_list if pair[1] in prec_values}
+    rec_values = {pair[1]:rec_values[pair[1]] for pair in top_list if pair[1] in rec_values}
+    acc_values = {pair[1]:acc_values[pair[1]] for pair in top_list if pair[1] in acc_values}
+
+    print_names = [f'{extract_information_from_name(file_name)[2]} bs:{extract_information_from_name(file_name)[0]} ' \
+                   f'lr:{extract_information_from_name(file_name)[1]} DSC: {score:.2f}' for score, file_name in top_list]
 
     dsc_data = pd.DataFrame.from_dict(dsc_values, orient='index').T
     prec_data = pd.DataFrame.from_dict(prec_values, orient='index').T
     rec_data = pd.DataFrame.from_dict(rec_values, orient='index').T
     acc_data = pd.DataFrame.from_dict(acc_values, orient='index').T
 
-    # build the image to plot
+    alphabet_string = string.ascii_uppercase
+    alphabet_list = list(alphabet_string)
 
-    fig1 = plt.figure(1, figsize=(11,7))
+    rename_headers = {element:alphabet_list[i] for i, element in enumerate(dsc_data)}
+    dsc_data = dsc_data.rename(rename_headers, axis=1)
+    prec_data = prec_data.rename(rename_headers, axis=1)
+    rec_data = rec_data.rename(rename_headers, axis=1)
+
+    # re-arrange the data for analysis
+    acc_data = acc_data.rename(rename_headers, axis=1)
+    dict_temp = pd.DataFrame.to_dict(acc_data)
+    new_dict = {}
+    index = 0
+    for element in dict_temp:
+        for i, sub_elem in enumerate(dict_temp[element]):
+            new_dict[index] = {'acc': dict_temp[element][i], 'experiment': element}
+            index += 1
+    new_acc_vals = pd.DataFrame.from_dict(new_dict, orient='index')
+
+    # build the image to plot
+    fig1 = plt.figure(1, figsize=(16,9))
     ax1 = fig1.add_subplot(221)
-    ax1 = sns.boxplot(data=dsc_data)
+    sns.boxplot(data=dsc_data)
     #ax1 = sns.swarmplot(data=dsc_data, color=".25")
     ax1.set_ylim([0, 1.0])
     ax1.title.set_text('$DSC$')
@@ -501,28 +552,82 @@ def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_
     ax2 = fig1.add_subplot(222)
     ax2 = sns.boxplot(data=prec_data)
     #ax2 = sns.swarmplot(data=prec_data, color=".25")
-    ax1.set_ylim([0, 1.0])
+    ax2.set_ylim([0, 1.0])
     ax2.title.set_text('$PREC$')
 
     ax3 = fig1.add_subplot(223)
     ax3 = sns.boxplot(data=rec_data)
     #ax3 = sns.swarmplot(data=rec_data, color=".25")
-    ax1.set_ylim([0, 1.0])
+    ax3.set_ylim([0, 1.0])
     ax3.title.set_text('$REC$')
 
     ax4 = fig1.add_subplot(224)
-    ax4 = sns.boxplot(data=acc_data)
-    #ax4 = sns.swarmplot(data=acc_data, color=".25")
-    ax1.set_ylim([0, 1.0])
+    ax4 = sns.boxplot(x='experiment', y='acc', hue='experiment', data=new_acc_vals, fliersize=0)
+    handles, labels = ax4.get_legend_handles_labels()
+    ax4.set_ylim([0, 1.0])
     ax4.title.set_text('$ACC$')
+    ax4.legend(handles, print_names, loc="right")
 
-    plt.show()
+    # create a folder analysis inside the directory in case it doesnt exits to save the figures
+    if dir_save_results == '':
+        analysis_folder = dir_folder_experiments + 'analysis/'
+        if not(os.path.isdir(analysis_folder)):
+            os.mkdir(analysis_folder)
 
+        dir_save_results = ''.join([analysis_folder, 'analysis_', date_analysis.strftime("%d_%m_%Y_%H_%M"), '/'])
+        if not(os.path.isdir(dir_save_results)):
+            os.mkdir(dir_save_results)
 
+    # Save the figure of the box plots considered in the analysis
+    plot_save_name = ''.join([dir_save_results, 'Boxplot_comparisons_', date_analysis.strftime("%d_%m_%Y_%H_%M"), '_.png'])
+    plt.savefig(plot_save_name)
+    #plt.show()
+    plt.close()
+
+    # Save a CSV file stating the data considered in the analysis
+    if len(zipped_results) < 26:
+        ID_results = list(alphabet_string)[:len(zipped_results)]
+
+    else:
+        ID_results = list(alphabet_string)
+        while len(ID_results) < len(zipped_results):
+            ID_results.append('')
+
+    print(len(ID_results))
+    list_batch_sizes = []
+    list_learning_rates = []
+    list_models = []
+    list_dates_experiment = []
+    dsc_list = []
+    filename_list = []
+    list_experiments_save = []
+    for result in zipped_results:
+        dsc, filename = result
+        dsc_list.append(dsc)
+        filename_list.append(filename)
+        lookfor_name = filename.replace('_.csv', '')
+        lookfor_name = lookfor_name.replace('evaluation_results_test_0_', '')
+        for experiment in list_experiments:
+            if lookfor_name in experiment:
+                list_experiments_save.append(experiment.replace(dir_folder_experiments, ''))
+        lr, bs, model_name, date_experiment = extract_information_from_name(filename)
+        list_batch_sizes.append(bs)
+        list_learning_rates.append(lr)
+        list_models.append(model_name)
+        list_dates_experiment.append(date_experiment)
+
+    export_data_used = pd.DataFrame(np.array([ID_results, list_experiments_save, dsc_list, list_batch_sizes,
+                                             list_learning_rates, list_models, list_dates_experiment, filename_list]).T,
+                                    columns=['ID', 'Experiment', 'DSC', 'batch size', 'learning rate',
+                                             'Model name', 'date experiment', 'file experiment'])
+
+    name_data_save = ''.join([dir_save_results, 'Data_used_', date_analysis.strftime("%d_%m_%Y_%H_%M"), '_.csv'])
+    export_data_used.to_csv(name_data_save)
+    print(f'results saved at {dir_save_results}')
 
 
 if __name__ == '__main__':
-    pass
+    #pass
     #try:
     #    app.run(analyze_data)
     #except SystemExit:
