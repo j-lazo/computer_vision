@@ -426,7 +426,6 @@ def analyze_dataset(path_dataset):
     print(f'path Dataset {path_dataset}')
     shape_imgs = []
     list_dirs = sorted([x[0] for x in os.walk(path_dataset)])
-    print(list_dirs)
     for i, folder in enumerate(list_dirs):
         list_imgs = [image for image in os.listdir(folder) if (image.endswith('.png') or image.endswith('.jpg'))]
         if list_imgs:
