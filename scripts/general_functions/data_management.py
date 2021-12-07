@@ -1,3 +1,4 @@
+import copy
 import os
 import scipy.io
 import numpy as np
@@ -7,10 +8,272 @@ import pandas as pd
 import ast
 import shutil
 import random
+import colorsys
+from scipy.ndimage import zoom
+from PIL import Image
 
 from matplotlib import pyplot as plt
 import keras
 import tensorflow as tf
+#import skimage
+
+rgb_to_hsv = np.vectorize(colorsys.rgb_to_hsv)
+hsv_to_rgb = np.vectorize(colorsys.hsv_to_rgb)
+
+def clipped_zoom(img, zoom_factor, **kwargs):
+    """
+    :param img:
+    :param zoom_factor:
+    :param kwargs:
+    :return:
+    """
+
+    h, w = img.shape[:2]
+
+    # For multichannel images we don't want to apply the zoom factor to the RGB
+    # dimension, so instead we create a tuple of zoom factors, one per array
+    # dimension, with 1's for any trailing dimensions after the width and height.
+    zoom_tuple = (zoom_factor,) * 2 + (1,) * (img.ndim - 2)
+
+    # Zooming out
+    if zoom_factor < 1:
+
+        # Bounding box of the zoomed-out image within the output array
+        zh = int(np.round(h * zoom_factor))
+        zw = int(np.round(w * zoom_factor))
+        top = (h - zh) // 2
+        left = (w - zw) // 2
+
+        # Zero-padding
+        out = np.zeros_like(img)
+        out[top:top + zh, left:left + zw] = zoom(img, zoom_tuple, **kwargs)
+
+    # Zooming in
+    elif zoom_factor > 1:
+
+        # Bounding box of the zoomed-in region within the input array
+        zh = int(np.round(h / zoom_factor))
+        zw = int(np.round(w / zoom_factor))
+        top = (h - zh) // 2
+        left = (w - zw) // 2
+
+        out = zoom(img[top:top + zh, left:left + zw], zoom_tuple, **kwargs)
+
+        # `out` might still be slightly larger than `img` due to rounding, so
+        # trim off any extra pixels at the edges
+        # trim_top = ((out.shape[0] - h) // 2)
+        # trim_left = ((out.shape[1] - w) // 2)
+        # out = out[trim_top:trim_top+h, trim_left:trim_left+w]
+
+    # If zoom_factor == 1, just return the input array
+    else:
+        out = img
+    return out
+
+
+def adjust_brightness(image, gamma=1.0):
+    """
+
+    :param image:
+    :param gamma:
+    :return:
+    """
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255
+                      for i in np.arange(0, 256)]).astype("uint8")
+
+    return cv2.LUT(image, table)
+
+
+def shift_hue(arr, hout):
+    """
+
+    :param arr:
+    :param hout:
+    :return:
+    """
+    r, g, b, a = np.rollaxis(arr, axis=-1)
+    h, s, v = rgb_to_hsv(r, g, b)
+    h = hout
+    r, g, b = hsv_to_rgb(h, s, v)
+    arr = np.dstack((r, g, b, a))
+    return arr
+
+
+def colorize(image, hue):
+    """
+    Colorize PIL image `original` with the given
+    `hue` (hue within 0-360); returns another PIL image.
+    :param image:
+    :param hue:
+    :return:
+
+    """
+
+    arr = np.array(np.asarray(image).astype('float'))
+    new_img = Image.fromarray(shift_hue(arr, hue/360.).astype('uint8'), 'RGBA')
+
+    return new_img
+
+
+
+def augment_image(img, mask):
+    """
+
+    :param img:
+    :param mask:
+    :return:
+    """
+    augmented_imgs = []
+    augmented_masks = []
+    list_operations = []
+
+    augmented_imgs.append(img)
+    augmented_masks.append(mask)
+
+    rows, cols, channels = img.shape
+    # define the rotation matrixes
+    rot1 = cv2.getRotationMatrix2D((cols / 2, rows / 2), 90, 1)
+    rot2 = cv2.getRotationMatrix2D((cols / 2, rows / 2), 180, 1)
+    rot3 = cv2.getRotationMatrix2D((cols / 2, rows / 2), 270, 1)
+
+    # rotate the images
+    im_rot1 = cv2.warpAffine(img, rot1, (cols, rows))
+    im_rot2 = cv2.warpAffine(img, rot2, (cols, rows))
+    im_rot3 = cv2.warpAffine(img, rot3, (cols, rows))
+    augmented_imgs.append(im_rot1)
+    augmented_imgs.append(im_rot2)
+    augmented_imgs.append(im_rot3)
+
+    # rotate the masks
+    mask_rot1 = cv2.warpAffine(mask, rot1, (cols, rows))
+    mask_rot2 = cv2.warpAffine(mask, rot2, (cols, rows))
+    mask_rot3 = cv2.warpAffine(mask, rot3, (cols, rows))
+    augmented_masks.append(mask_rot1)
+    augmented_masks.append(mask_rot2)
+    augmented_masks.append(mask_rot3)
+
+    # flip images
+    horizontal_img = cv2.flip(img, 0)
+    vertical_img = cv2.flip(img, 1)
+    augmented_imgs.append(horizontal_img)
+    augmented_imgs.append(vertical_img)
+    # flip masks
+    horizontal_mask = cv2.flip(mask, 0)
+    vertical_mask = cv2.flip(mask, 1)
+    augmented_masks.append(horizontal_mask)
+    augmented_masks.append(vertical_mask)
+
+    list_of_images = copy.copy(augmented_imgs)
+    list_of_masks = copy.copy(augmented_masks)
+
+    # change brightness
+    gammas = [0.6, 0.7, 0.8, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5]
+
+    for i in range(4):
+        index = random.randint(0, len(list_of_images) - 1)
+        img_choice = list_of_images[index]
+        mask_choice = list_of_masks[index]
+        image_brg = adjust_brightness(img_choice, random.choice(gammas))
+        augmented_imgs.append(image_brg)
+        augmented_masks.append(mask_choice)
+
+
+    # zoom in
+    index_2 = random.randint(0, len(list_of_images) - 1)
+    img_choice_2 = list_of_images[index_2]
+    mask_choice_2 = list_of_masks[index_2]
+    zoom_in_img = clipped_zoom(img_choice_2, 1.2)
+    zoom_in_mask = clipped_zoom(mask_choice_2, 1.2)
+    augmented_imgs.append(zoom_in_img)
+    augmented_masks.append(zoom_in_mask)
+
+    # zoom out
+    index_3 = random.randint(0, len(list_of_images) - 1)
+    img_choice_3 = list_of_images[index_3]
+    mask_choice_3 = list_of_masks[index_3]
+    zoom_out_img = clipped_zoom(img_choice_3, 0.8)
+    zoom_out_mask = clipped_zoom(mask_choice_3, 0.8)
+    augmented_imgs.append(zoom_out_img)
+    augmented_masks.append(zoom_out_mask)
+
+    # change hue
+    #index_4 = random.randint(0, len(list_of_images) - 1)
+    #img_choice_4 = list_of_images[index_4]
+    #mask_choice_4 = list_of_masks[index_4]
+    #colorized = colorize(img_choice_4, np.random.randint(70, 220))
+    #augmented_imgs.append(colorized)
+    #augmented_masks.append(mask_choice_4)
+
+    # change contrast
+    index_5 = random.randint(0, len(list_of_images) - 1)
+    img_choice_5 = list_of_images[index_5]
+    mask_choice_5 = list_of_masks[index_5]
+    stateless_random_contrast = tf.image.stateless_random_contrast(img_choice_5, lower=0.5, upper=0.9, seed = (i, 0))
+    augmented_imgs.append(stateless_random_contrast.numpy())
+    augmented_masks.append(mask_choice_5)
+
+    #index_6 = random.randint(0, len(list_of_images) - 1)
+    #img_choice_6 = list_of_images[index_6]
+    #mask_choice_6 = list_of_masks[index_6]
+    #noisy_image = skimage.util.random_noise(img_choice_6, mode='s&p')
+    #augmented_imgs.append(noisy_image)
+    #augmented_masks.append(mask_choice_6)
+
+    index_7 = random.randint(0, len(list_of_images) - 1)
+    img_choice_7 = list_of_images[index_7]
+    mask_choice_7 = list_of_masks[index_7]
+    saturated = tf.image.adjust_saturation(img_choice_7, 3)
+    augmented_imgs.append(saturated.numpy())
+    augmented_masks.append(mask_choice_7)
+
+    return  augmented_imgs, augmented_masks, list_operations
+
+
+def augment_dataset(files_path, destination_path='', visualize_augmentation=False):
+    """
+    Performs data augmentation given a directory containing images and masks
+    :param files_path:
+    :param destination_path:
+    :return:
+    """
+    files = os.listdir(files_path + 'images/')
+    masks = os.listdir(files_path + 'masks/')
+
+    if destination_path == '':
+        destination_path = files_path
+    else:
+        if not(os.path.isdir(destination_path)):
+            os.mkdir(destination_path)
+            os.mkdir(destination_path + 'images/')
+            os.mkdir(destination_path + 'masks/')
+
+
+    for i, element in enumerate(tqdm.tqdm(files[:], desc='Augmenting Dataset')):
+
+        if element not in masks:
+            print(f'{element}, has no pair')
+
+        img = cv2.imread("".join([files_path, 'images/', element]))
+        mask = cv2.imread("".join([files_path, 'masks/', element]))
+        list_images, list_masks, list_operations, = augment_image(img, mask)
+
+        # visualize the augmentation
+
+        if visualize_augmentation is True:
+            plt.figure()
+            for i in range(len(list_images)-1):
+                plt.subplot(4,4,i+1)
+                plt.imshow(list_images[i])
+
+            plt.show()
+
+        # save the images
+        for i, image in enumerate(list_images):
+            cv2.imwrite("".join([destination_path, 'images/', element[:-4], '_', str(i).zfill(3), '.png']), list_images[i])
+            cv2.imwrite("".join([destination_path, 'masks/', element[:-4], '_', str(i).zfill(3), '.png']), list_masks[i])
+
+
 
 def check_folder_exists(folder_dir, create_folder=False):
 
