@@ -17,6 +17,7 @@ import datetime
 import glob
 import re
 import string
+import sys
 import ast
 import shutil
 import random
@@ -205,12 +206,35 @@ def get_confusion_matrix_overlaid_mask(image, groundtruth, predicted, alpha, col
     return color_mask.astype(np.float32)  # cv2.addWeighted(image, 0.1, color_mask, 0.5, 0)
 
 
-def compare_results_overlay(dir_groundtruth, dir_predictions, dir_csv_file, save_directory=''):
-    path_images_folder = dir_groundtruth + 'images/'
-    path_masks_folder = dir_groundtruth + 'masks/'
-    data_results = pd.read_csv(dir_csv_file)
+def compare_results_overlay(experiment_id = '', base_directory= '', dir_predictions='', selected_data = 'test',
+                            dir_groundtruth='', dir_csv_file='', save_directory=''):
+
+    if experiment_id != '':
+        if base_directory !='':
+            directory_experiment = ''.join([base_directory, 'results/', experiment_id])
+            list_predicted_dataset = [folder for folder in os.listdir(directory_experiment + '/predictions/') if selected_data in folder]
+            csv_file_name = [f for f in os.listdir(directory_experiment) if f.endswith('.csv') and 'evaluation_results_' in f][0]
+            dir_predictions = ''.join([base_directory, 'results/', experiment_id, '/predictions/', list_predicted_dataset[0], '/'])
+            path_images_folder = ''.join([base_directory, 'dataset/', list_predicted_dataset[0], '/images/'])
+            path_masks_folder = ''.join([base_directory, 'dataset/', list_predicted_dataset[0], '/masks/'])
+            data_results = pd.read_csv(''.join([directory_experiment, '/', csv_file_name]))
+
+        else:
+            sys.exit("base_directory needed")
+    else:
+
+        path_images_folder = dir_groundtruth + 'images/'
+        path_masks_folder = dir_groundtruth + 'masks/'
+        data_results = pd.read_csv(dir_csv_file)
+
     list_dice_values = data_results['DSC'].tolist()
     list_imgs_csv = data_results['Image'].tolist()
+
+    if save_directory == '':
+        save_directory = ''.join([directory_experiment, '/overlay_results/'])
+        if not(os.path.isdir(save_directory)):
+            os.mkdir(save_directory)
+
 
     image_list = [f for f in os.listdir(path_images_folder) if os.path.isfile(os.path.join(path_images_folder, f))]
     mask_list = [f for f in os.listdir(path_masks_folder) if os.path.isfile(os.path.join(path_masks_folder, f))]
@@ -396,25 +420,33 @@ def analyze_performances(project_dir):
     """
     # 2DO: recognize directory or list
 
-    results_list = os.listdir(project_dir + 'results/')
-    results_list.remove('temp')
-    for experiment_id in results_list:
-        print(experiment_id)
-        folders_prediction = os.listdir(os.path.join(project_dir, 'results', experiment_id, 'predictions'))
+    if type(project_dir) == str:
 
-        for folder in folders_prediction:
-            dir_results = os.path.join(project_dir, 'results', experiment_id, 'predictions', folder)
-            dir_gt = os.path.join(project_dir, 'dataset', folder, 'masks/')
+        results_list = os.listdir(project_dir + 'results/')
+        results_list.remove('temp')
+        results_list.remove('analysis')
+        results_list.remove('Transpose_ResUnet')
+        results_list.remove('Residual_Unet')
 
-            if os.path.isdir(dir_gt):
-                results_data = calculate_performance(dir_results, dir_gt)
-                name_results_file = ''.join([project_dir, 'results/', experiment_id, '/',
-                                             'evaluation_results_', folder, '_',experiment_id, '_.csv'])
+        print(results_list)
 
-                results_data.to_csv(name_results_file)
-                print(f"results saved at: {name_results_file}")
-            else:
-                print(f' folder: {dir_gt} not found')
+        for experiment_id in results_list:
+            print(experiment_id)
+            folders_prediction = os.listdir(os.path.join(project_dir, 'results', experiment_id, 'predictions'))
+
+            for folder in folders_prediction:
+                dir_results = os.path.join(project_dir, 'results', experiment_id, 'predictions', folder)
+                dir_gt = os.path.join(project_dir, 'dataset', folder, 'masks/')
+
+                if os.path.isdir(dir_gt):
+                    results_data = calculate_performance(dir_results, dir_gt)
+                    name_results_file = ''.join([project_dir, 'results/', experiment_id, '/',
+                                                 'evaluation_results_', folder, '_',experiment_id, '_.csv'])
+
+                    results_data.to_csv(name_results_file)
+                    print(f"results saved at: {name_results_file}")
+                else:
+                    print(f' folder: {dir_gt} not found')
 
 
 def save_boxplots(project_dir):
@@ -627,6 +659,12 @@ def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_
 
 
 if __name__ == '__main__':
+    dir_folder_experiments = ''
+    compare_experiments(dir_folder_experiments, top_results=0.4)
+    #compare_results_overlay(dir_groundtruth, dir_predictions, dir_csv_file, save_directory=svae_dir)
+    # analyze_performances(dir_folder_experiments)
+    #compare_experiments(dir_folder_experiments, top_results=0.4)
+
     #pass
     #try:
     #    app.run(analyze_data)
