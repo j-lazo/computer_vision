@@ -288,12 +288,22 @@ def check_folder_exists(folder_dir, create_folder=False):
         exists = True
     return exists
 
+def convert_image_format(dir_image, target_format=''):
+    """
+
+    :param dir_image:
+    :param target_format:
+    :return:
+    """
+    converted_image = cv2.imread(dir_image)
+    return converted_image
 
 
 def generate_training_and_validation_sets(input_directory, output_directory,
                                           training_percentage=0.5, test_dataset='False',
-                                          input_sub_dirs=[], pairs_of_data=[]):
+                                          input_sub_dirs=[], pairs_of_data=[], convert_data=[]):
 
+    print(test_dataset)
     """
     By default splits an image and mask dataset into training/validation with a 0.5/0.5 rate
     If test dataset is selected, the percentage for each of them should be input in list form.
@@ -303,17 +313,20 @@ def generate_training_and_validation_sets(input_directory, output_directory,
     :param input_directory: A directory where the dataset to be split is located
     :param output_directory: Location of the output directory
     :param test_dataset: (bool) False by default. Splits the dataset into train/val/test
-    :param input_sub_dirs (list of strings) If the input data is contained in different folders, indicate the name of
+    :param input_sub_dirs (list of strings) If the original dataset is contained in different folders, indicate the name of
     the folders to be considered inside 'Input directory'
     :param training_percentage: (float, list) default 0.5 If test_dataset is True, a list with the
     percentages for [train, val, test] should be indicated
     :param pairs_of_data: (list of strings) default []. If the pairs of data between the annotations and the data have different
     indication indicate its extensions [data_extension, annotation_extension] e.g.: ['.npy', '.png']
+    : param convert_data: (list) [] ['original_format', ['target_format']] if selected converts data from a format to another, 
+    for example ['.jpg', '.png'] converts images from '.jpg' to '.png'
     :return:
     """
 
     training_dir = output_directory + 'train/'
     validation_dir = output_directory + 'val/'
+
     check_folder_exists(training_dir, create_folder=True)
     check_folder_exists(validation_dir, create_folder=True)
     list_destination_folders = [training_dir, validation_dir]
@@ -337,15 +350,20 @@ def generate_training_and_validation_sets(input_directory, output_directory,
             destination_dir = random.choices(list_destination_folders, weights=training_percentage)[0]
             if image in label_images:
                 print(f'{image} image and label exists')
-                if pairs_of_data:
-                    name_img = ''.join([image, pairs_of_data[0]])
-                    name_mask = ''.join([image, pairs_of_data[1]])
-                else:
-                    name_img = ''.join([image, '.png'])
-                    name_mask = ''.join([image, '.png'])
 
-                shutil.copy(''.join([files_path_images, name_img]), ''.join([destination_dir, 'images/', name_img]))
-                shutil.copy(''.join([files_path_masks, name_mask]), ''.join([destination_dir, 'masks/', name_mask]))
+                if not convert_data:
+                    if pairs_of_data:
+                        name_img = ''.join([image, pairs_of_data[0]])
+                        name_mask = ''.join([image, pairs_of_data[1]])
+                    else:
+                        name_img = ''.join([image, '.png'])
+                        name_mask = ''.join([image, '.png'])
+
+                    shutil.copy(''.join([files_path_images, name_img]), ''.join([destination_dir, 'images/', name_img]))
+                    shutil.copy(''.join([files_path_masks, name_mask]), ''.join([destination_dir, 'masks/', name_mask]))
+
+                else:
+
 
             else:
                 print(f'the pair of {image} does not exists')
