@@ -20,6 +20,9 @@ from sklearn.metrics import recall_score
 from sklearn.metrics import accuracy_score
 import datetime
 import tqdm
+from tensorflow.keras import layers
+from general_functions import data_management as dam
+
 
 def load_model(project_folder, name_model):
     results_directory = ''.join([project_folder, 'results/', name_model, '/'])
@@ -32,6 +35,7 @@ def load_model(project_folder, name_model):
     input_size = (len(model.layers[0].output_shape[0])) - 1
 
     return model, input_size
+
 
 def load_data(path, image_modality):
     path_images = ''.join([path, "images/*"])
@@ -137,8 +141,50 @@ def tf_parse_v3(x, y):
     y.set_shape([256, 256, 1])
     return (x_vol, x_frame), y
 
+batch_size = 32
+AUTOTUNE = tf.data.AUTOTUNE
 
-def tf_dataset(x, y, batch=8, img_modality='rgb'):
+
+def prepare_dataset(dataset, shuffle=False, augment=False):
+    """
+    2DO: Build the function to perform data augmentation on the fly
+    :param dataset:
+    :param shuffle:
+    :param augment:
+    :return:
+    """
+    def resize_and_rescale(image, label):
+        image = tf.cast(image, tf.float32)
+        IMG_SIZE = 256
+        image = tf.image.resize(image, [IMG_SIZE, IMG_SIZE])
+        image = (image / 255.0)
+        return image, label
+
+    # Resize and rescale all datasets.
+    dataset = dataset.map(lambda x, y: (resize_and_rescale(x), y),
+                          num_parallel_calls=AUTOTUNE)
+
+    if shuffle:
+        dataset = dataset.shuffle(1000)
+
+    # Batch all datasets.
+    dataset = dataset.batch(batch_size)
+
+    # Use data augmentation only on the training set.
+    if augment:
+      data_augmentation = tf.keras.Sequential([
+          layers.RandomFlip("horizontal_and_vertical"),
+          layers.RandomRotation(0.2),
+      ])
+
+    dataset = dataset.map(lambda x, y: (data_augmentation(x, training=True), y),
+                num_parallel_calls=AUTOTUNE)
+
+    # Use buffered prefetching on all datasets.
+    return dataset.prefetch(buffer_size=AUTOTUNE)
+
+
+def tf_dataset(x, y, batch=8, img_modality='rgb', shuffle=False):
     dataset = tf.data.Dataset.from_tensor_slices((x, y))
 
     if img_modality == 'npy':
@@ -150,6 +196,10 @@ def tf_dataset(x, y, batch=8, img_modality='rgb'):
 
     dataset = dataset.batch(batch)
     dataset = dataset.repeat()
+
+    if shuffle:
+        dataset = dataset.shuffle(200)
+
     return dataset
 
 
@@ -587,7 +637,8 @@ def save_plots(model_history, results_directory, new_results_id):
     print('Plots of the history saved at: results_directory')
 
 
-def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, prediction_folder=''):
+def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, prediction_folder='', augmented=False,
+               analyze_validation_set=False, evaluate_train_dir = False):
 
     if mode == 'train':
         # optimizer:
@@ -595,15 +646,29 @@ def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, 
 
         # image modality of the data
         image_modality = 'rgb'
-        augmented = False
-        if augmented is True:
-            amount_data = '/'
-        else:
-            amount_data = '/'
-
         # Define training and validation data
-        train_data_used = ''.join([project_folder, 'dataset/train/'])
-        val_data_used = ''.join([project_folder, 'dataset/val/'])
+
+        if augmented is True:
+
+            train_data_used = ''.join([project_folder, 'dataset/augmented/train/'])
+            val_data_used = ''.join([project_folder, 'dataset/val/'])
+
+            augmented_dir = ''.join([project_folder, 'dataset/augmented/'])
+            if not os.path.isdir(augmented_dir):
+                os.mkdir(augmented_dir)
+                os.mkdir(''.join([augmented_dir, 'train/']))
+                os.mkdir(''.join([augmented_dir, 'train/images/']))
+                os.mkdir(''.join([augmented_dir, 'train/masks/']))
+                os.mkdir(''.join([augmented_dir, 'val/']))
+                os.mkdir(''.join([augmented_dir, 'val/images/']))
+                os.mkdir(''.join([augmented_dir, 'val/masks/']))
+
+                dam.augment_dataset(''.join([project_folder, 'dataset/train/']), destination_path=train_data_used)
+                dam.augment_dataset(''.join([project_folder, 'dataset/val/']), destination_path=val_data_used)
+
+        else:
+            train_data_used = ''.join([project_folder, 'dataset/train/'])
+            val_data_used = ''.join([project_folder, 'dataset/val/'])
 
         if name_model == 'continuous_blocks_ResUnet':
             image_modality = 'npy'
@@ -627,9 +692,9 @@ def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, 
         print('Data validation: ', val_data_used)
 
         train_dataset = tf_dataset(train_x, train_y, batch=batch,
-                                   img_modality=image_modality)
+                                   img_modality=image_modality, shuffle=True)
         valid_dataset = tf_dataset(valid_x, valid_y, batch=batch,
-                                   img_modality=image_modality)
+                                   img_modality=image_modality, shuffle=True)
 
         # metrics list:
         metrics = ["acc", tf.keras.metrics.Recall(),
@@ -641,10 +706,9 @@ def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, 
         training_starting_time = datetime.datetime.now()
 
         # determine if also perform analysis of the training and validation dataset
-        analyze_validation_set = False
-        evaluate_train_dir = False
-        # ID name for the folder and results
 
+        # ID name for the folder and results
+        
         new_results_id = ''.join([name_model,
                                   '_lr_',
                                   str(lr),
@@ -661,10 +725,10 @@ def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, 
 
         callbacks = [
             ModelCheckpoint(results_directory + new_results_id + "_model.h5"),
-            ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=90),
+            ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=35),
             CSVLogger(results_directory + new_results_id + "_data.csv"),
             TensorBoard(),
-            EarlyStopping(monitor='val_loss', patience=90, restore_best_weights=True)]
+            EarlyStopping(monitor='val_loss', patience=35, restore_best_weights=True)]
 
         train_steps = len(train_x) // batch
         valid_steps = len(valid_x) // batch
@@ -718,9 +782,9 @@ def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, 
             os.mkdir(results_directory + 'predictions/val/')
             if image_modality == 'npy' or image_modality == 'ensemble':
                 evaluation_directory = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
-                                                'val/original_data/'])
+                                                'dataset/val/'])
             else:
-                evaluation_directory_val = project_folder + "val/original_data/"
+                evaluation_directory_val = project_folder + "dataset/val/"
             name_test_csv_file = evaluate_and_predict(model, evaluation_directory_val,
                                                       image_modality, results_directory,
                                                       'val', new_results_id)
@@ -729,9 +793,9 @@ def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, 
             os.mkdir(results_directory + 'predictions/train/')
             if image_modality == 'npy' or image_modality == 'ensemble':
                 evaluation_directory = ''.join([project_folder, 'volume_data/', str(3), '_continuous_frames/',
-                                                'train/original_data/'])
+                                                'train/'])
             else:
-                evaluation_directory_val = project_folder + "train/original_data/"
+                evaluation_directory_val = project_folder + "dataset/train/"
             name_test_csv_file = evaluate_and_predict(model, evaluation_directory_val,
                                                       image_modality, results_directory,
                                                       'train', new_results_id)
@@ -773,18 +837,19 @@ def call_model(mode, project_folder, name_model, batch=4, lr=0.001, epochs=750, 
         print(f'mode: {mode} not understood, optrions: train, predict')
 
 
+
 if __name__ == "__main__":
 
     project_folder = ''
-    mode = 'train'
-    name_models = ['residual_unet']
+    name_models = ['Transpose_ResUnet']
     # Hyper-parameters:
-    batches = [32, 16, 8, 4]
-    learing_rates = [1e-3, 1e-4, 1e-5, 1e-6]
+    batches = [4]
+    learing_rates = [1e-3]
     for name_model in name_models:
         for batch in batches:
             for lr in learing_rates:
-                call_model(mode, project_folder, name_model, batch, lr)
+                call_model('train', project_folder, name_model, batch=batch, lr=lr)
+
 
 
 
