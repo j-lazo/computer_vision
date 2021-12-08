@@ -33,7 +33,7 @@ def build_model():
     img_height = 256
     img_width = 256
     nclasses = 1
-    filters = 16
+    filters = 32
 
     # down
     input_layer = Input(shape=(img_height, img_width, 3), name='image_input')

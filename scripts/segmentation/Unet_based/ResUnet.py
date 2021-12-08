@@ -22,7 +22,7 @@ def conv_block(x, num_filters):
     return x
 
 
-def build_model(input_size=256, num_filters=[16, 32, 48, 64]):
+def build_model(input_size=256, num_filters=[32, 64, 128, 256]):
 
     #num_filters = [16, 32, 48, 64]
     # num_filters = [64, 48, 32, 16]
