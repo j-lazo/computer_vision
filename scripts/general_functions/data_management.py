@@ -288,15 +288,24 @@ def check_folder_exists(folder_dir, create_folder=False):
         exists = True
     return exists
 
-def convert_image_format(dir_image, target_format=''):
+def convert_image_format(dir_images, input_format, target_format, output_directory):
     """
 
-    :param dir_image:
+    :param dir_images:
     :param target_format:
+    :param output_dir:
     :return:
     """
-    converted_image = cv2.imread(dir_image)
-    return converted_image
+
+    def _read_img(img_dir):
+        img =cv2.imread(img_dir)
+        return img
+
+    list_imgs = os.listdir(dir_images)
+    for image in list_imgs:
+        img = _read_img(dir_images + image)
+        cv2.imwrite(''.join([output_directory, '/', img]).replace(input_format, target_format), img)
+
 
 
 def generate_training_and_validation_sets(input_directory, output_directory,
@@ -345,11 +354,10 @@ def generate_training_and_validation_sets(input_directory, output_directory,
         original_images = [image[:-4] for image in original_images]
         label_images = [image[:-4] for image in label_images]
 
-        for i, image in enumerate(original_images):
+        for i, image_name in enumerate(tqdm.tqdm(original_images, desc='Reading images and masks')):
 
             destination_dir = random.choices(list_destination_folders, weights=training_percentage)[0]
             if image in label_images:
-                print(f'{image} image and label exists')
 
                 if not convert_data:
                     if pairs_of_data:
@@ -363,6 +371,14 @@ def generate_training_and_validation_sets(input_directory, output_directory,
                     shutil.copy(''.join([files_path_masks, name_mask]), ''.join([destination_dir, 'masks/', name_mask]))
 
                 else:
+                    input_format =  convert_data[0]
+                    target_format = convert_data[1]
+
+                    img = cv2.imread(''.join([files_path_images, image, input_format]))
+                    cv2.imwrite(''.join([destination_dir, 'images/', image, target_format]), img)
+
+                    mask = cv2.imread(''.join([files_path_masks, image, input_format]))
+                    cv2.imwrite(''.join([destination_dir, 'masks/', image, target_format]), mask)
 
 
             else:

@@ -411,24 +411,25 @@ def calculate_performance(dir_results, dir_groundtruth):
     return data_results
 
 
-def analyze_performances(project_dir):
+def analyze_performances(project_dir, exclude=[]):
 
     """
     Analyze the performance of a directory or a list of directories
     :param project_dir:
+    :param exclude:
     :return:
     """
     # 2DO: recognize directory or list
 
     if type(project_dir) == str:
 
-        results_list = os.listdir(project_dir + 'results/')
+        results_list = sorted(os.listdir(project_dir + 'results/'))
         results_list.remove('temp')
         results_list.remove('analysis')
-        results_list.remove('Transpose_ResUnet')
-        results_list.remove('Residual_Unet')
 
-        print(results_list)
+        if exclude:
+            for elem in exclude:
+                exclude.remove(elem)
 
         for experiment_id in results_list:
             print(experiment_id)
@@ -506,7 +507,7 @@ def extract_information_from_name(string_name):
 
 
 def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_results_test_0'], dir_save_results='',
-                        top_results=1.0):
+                        exclude=[], top_results=1.0):
     """
     Compre the DSC, Prec, Rec and ACC of different experiments and save the boxplots comparison
     :param dir_folder_experiments:
@@ -525,6 +526,13 @@ def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_
     median_dsc = []
 
     list_experiments = [dir_folder for dir_folder in sorted(glob.glob(dir_folder_experiments + '*' )) if 'analysis' not in dir_folder or 'temp' not in dir_folder]
+
+    if exclude:
+        for experiment_folder in list_experiments:
+            for exclusion_case in exclude:
+                if exclusion_case in experiment_folder:
+                    list_experiments.remove(experiment_folder)
+
     for j, dir_experiment in enumerate(list_experiments):
         for selection in selection_criteria:
             list_results_files = [f for f in os.listdir(dir_experiment) if selection in f]
