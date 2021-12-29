@@ -665,13 +665,15 @@ def determine_if_subfolders_exists(path_dir):
     If more than one exists returns True, otherwise it returns False
 
     :param path_dir: (str) path to analyze
-    :return: (bool)
+    :return: (bool), list
     """
-    list_sub_folfers = [folder for folder in os.listdir(path_dir) if os.path]
+    test_list = os.listdir(path_dir)
+    list_sub_folfers = [folder for folder in os.listdir(path_dir)
+                        if os.path.isdir(os.path.join(path_dir, folder))]
     if len(list_sub_folfers) > 1:
-        return True
+        return True, list_sub_folfers
     else:
-        return False
+        return False, list_sub_folfers
 
 
 def build_dictionary_data_labels(path_dir, path_annotation_file=''):
@@ -809,6 +811,55 @@ def compare_images(image_1, image_2):
 
     return 0
 
+
+def copy_data_folder(original_dir, destination_dir):
+    pass
+
+
+def check_folder_exists(path_dir, create_dir=False):
+    """
+    Check if path exists if create path, then creates directory
+    :param path_dir: path directory
+    :return: (bool)
+    """
+    exists = os.path.isdir(path_dir)
+
+    if not exists and create_dir is True:
+        os.mkdir(path_dir)
+
+    return  exists
+
+
+
+def rearrange_data(dir_data, destination_dir=''):
+    list_patient_cases = [f for f in os.listdir(dir_data) if os.path.isdir(dir_data + f)]
+    list_patient_cases.remove('all_cases')
+    if destination_dir == '':
+        new_dir = dir_data + 'new_dir/'
+        os.mkdir(new_dir)
+        destination_dir = new_dir
+    for case in list_patient_cases:
+        destination_case_dir = destination_dir + case
+        sub_folders, list_subfolders = determine_if_subfolders_exists(dir_data + case)
+        if '.DS_Store' in list_subfolders:
+            list_subfolders.remove('.DS_Store')
+        if sub_folders:
+            for sub_folder in list_subfolders:
+                sub_path = ''.join([dir_data, case, '/', sub_folder])
+                ss_folder, ss_folders = determine_if_subfolders_exists(sub_path)
+                if ss_folder:
+                    pass
+                else:
+                    list_imgs = os.listdir(sub_path)
+
+
+
+
+if __name__ == "__main__":
+    directory_data = '/Users/admin/Jorge/current_projects/tumor_classification/data/cys/'
+    destination_dir = '/Users/admin/Jorge/current_projects/tissue_segmentation/all_cases/'
+    rearrange_data(directory_data, destination_dir=destination_dir)
+    pass
 
 
 
