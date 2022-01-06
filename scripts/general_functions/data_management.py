@@ -276,7 +276,6 @@ def augment_dataset(files_path, destination_path='', visualize_augmentation=Fals
             os.mkdir(destination_path + 'images/')
             os.mkdir(destination_path + 'masks/')
 
-
     for i, element in enumerate(tqdm.tqdm(files[:], desc='Augmenting Dataset')):
 
         if element not in masks:
@@ -693,13 +692,15 @@ def determine_if_subfolders_exists(path_dir):
     If more than one exists returns True, otherwise it returns False
 
     :param path_dir: (str) path to analyze
-    :return: (bool)
+    :return: (bool), list
     """
-    list_sub_folfers = [folder for folder in os.listdir(path_dir) if os.path]
+    test_list = os.listdir(path_dir)
+    list_sub_folfers = [folder for folder in os.listdir(path_dir)
+                        if os.path.isdir(os.path.join(path_dir, folder))]
     if len(list_sub_folfers) > 1:
-        return True
+        return True, list_sub_folfers
     else:
-        return False
+        return False, list_sub_folfers
 
 
 def build_dictionary_data_labels(path_dir, path_annotation_file=''):
@@ -790,6 +791,7 @@ def visualize_roimat_and_image(file_dir, original_folder=os.getcwd()):
     ax1.plot(mat['fovmask'][0][0] + mat['fovmask'][0][2], mat['fovmask'][0][1] + mat['fovmask'][0][3], 'r*')
     plt.show()"""
 
+
 def compare_images(image_1, image_2):
 
     """
@@ -837,6 +839,75 @@ def compare_images(image_1, image_2):
 
     return 0
 
+
+def copy_data_folder(original_dir, destination_dir, selected_items=[]):
+    """
+
+    :param original_dir:
+    :param destination_dir:
+    :param selected_items:
+    :return:
+    """
+
+    list_files_original_dir = os.listdir(original_dir)
+    for i, element in enumerate(tqdm.tqdm(list_files_original_dir[:], desc='Copying files ')):
+        source_file = original_dir + element
+        destination_file = destination_dir + element
+        if selected_items:
+            if element in selected_items:
+                shutil.copy(source_file, destination_file)
+        else:
+            shutil.copy(source_file, destination_file)
+
+
+def check_folder_exists(path_dir, create_dir=False):
+    """
+    Check if path exists if create path, then creates directory
+    :param path_dir: path directory
+    :return: (bool)
+    """
+    exists = os.path.isdir(path_dir)
+
+    if not exists and create_dir is True:
+        os.mkdir(path_dir)
+
+    return exists
+
+
+def rearrange_data(dir_data, destination_dir=''):
+    list_patient_cases = [f for f in os.listdir(dir_data) if os.path.isdir(dir_data + f)]
+    list_patient_cases.remove('all_cases')
+    if destination_dir == '':
+        new_dir = dir_data + 'new_dir/'
+        os.mkdir(new_dir)
+        destination_dir = new_dir
+    for case in list_patient_cases:
+        destination_case_dir = destination_dir + case
+        sub_folders, list_subfolders = determine_if_subfolders_exists(dir_data + case)
+        if '.DS_Store' in list_subfolders:
+            list_subfolders.remove('.DS_Store')
+        if sub_folders:
+            for sub_folder in list_subfolders:
+                sub_path = ''.join([dir_data, case, '/', sub_folder])
+                ss_folder, ss_folders = determine_if_subfolders_exists(sub_path)
+                if ss_folder:
+                    pass
+                else:
+                    list_imgs = os.listdir(sub_path)
+
+
+def reshape_data_blocks(directory_data):
+    list_data = os.listdir(directory_data)
+    #list_data.remove('.DS_store')
+    for element in list_data:
+        data_file = np.load(directory_data + element, allow_pickle=True)
+        print(np.shape(data_file))
+
+
+if __name__ == "__main__":
+    path_dir = '/Users/admin/Jorge/current_projects/artifacts/dataset/val/masks/'
+    reshape_data_blocks(path_dir)
+    pass
 
 
 
