@@ -248,7 +248,6 @@ def augment_dataset(files_path, destination_path='', visualize_augmentation=Fals
             os.mkdir(destination_path + 'images/')
             os.mkdir(destination_path + 'masks/')
 
-
     for i, element in enumerate(tqdm.tqdm(files[:], desc='Augmenting Dataset')):
 
         if element not in masks:
@@ -764,6 +763,7 @@ def visualize_roimat_and_image(file_dir, original_folder=os.getcwd()):
     ax1.plot(mat['fovmask'][0][0] + mat['fovmask'][0][2], mat['fovmask'][0][1] + mat['fovmask'][0][3], 'r*')
     plt.show()"""
 
+
 def compare_images(image_1, image_2):
 
     """
@@ -812,8 +812,24 @@ def compare_images(image_1, image_2):
     return 0
 
 
-def copy_data_folder(original_dir, destination_dir):
-    pass
+def copy_data_folder(original_dir, destination_dir, selected_items=[]):
+    """
+
+    :param original_dir:
+    :param destination_dir:
+    :param selected_items:
+    :return:
+    """
+
+    list_files_original_dir = os.listdir(original_dir)
+    for i, element in enumerate(tqdm.tqdm(list_files_original_dir[:], desc='Copying files ')):
+        source_file = original_dir + element
+        destination_file = destination_dir + element
+        if selected_items:
+            if element in selected_items:
+                shutil.copy(source_file, destination_file)
+        else:
+            shutil.copy(source_file, destination_file)
 
 
 def check_folder_exists(path_dir, create_dir=False):
@@ -827,8 +843,7 @@ def check_folder_exists(path_dir, create_dir=False):
     if not exists and create_dir is True:
         os.mkdir(path_dir)
 
-    return  exists
-
+    return exists
 
 
 def rearrange_data(dir_data, destination_dir=''):
@@ -853,12 +868,17 @@ def rearrange_data(dir_data, destination_dir=''):
                     list_imgs = os.listdir(sub_path)
 
 
+def reshape_data_blocks(directory_data):
+    list_data = os.listdir(directory_data)
+    #list_data.remove('.DS_store')
+    for element in list_data:
+        data_file = np.load(directory_data + element, allow_pickle=True)
+        print(np.shape(data_file))
 
 
 if __name__ == "__main__":
-    directory_data = '/Users/admin/Jorge/current_projects/tumor_classification/data/cys/'
-    destination_dir = '/Users/admin/Jorge/current_projects/tissue_segmentation/all_cases/'
-    rearrange_data(directory_data, destination_dir=destination_dir)
+    path_dir = '/Users/admin/Jorge/current_projects/artifacts/dataset/val/masks/'
+    reshape_data_blocks(path_dir)
     pass
 
 
