@@ -18,9 +18,67 @@ import glob
 import re
 import string
 import sys
+import cv2
 import ast
 import shutil
 import random
+
+
+def check_file_isvid(filename):
+    """
+    checks if a file has a video extension, accepted files are: '.mp4', '.mpg', '.avi'
+    :param filename: (str) name of the file
+    :return: (bool)
+    """
+    list_extensions = ['.mpg', '.mp4', '.MP4']
+    if filename[-4:] in list_extensions:
+        return True
+    else:
+        return False
+
+def get_video_files_in_dir(dir_dataset):
+    """
+    Given a directory checks if there are any video files and return the absolute path of the video files in a list
+    :param dir_dataset: (str) directory
+    :return: (list) list of video files
+    """
+
+    initial_list_files = os.listdir(dir_dataset)
+    list_folders = []
+    list_video_files = []
+
+    for file_name in initial_list_files:
+        if os.path.isdir(dir_dataset + file_name):
+            list_folders.append(file_name)
+        else:
+            if file_name[-4:] not in list_video_files:
+                list_video_files.append(dir_dataset + file_name)
+
+    for folder in list_folders:
+        list_files = os.listdir(dir_dataset + folder)
+        for file_name in list_files:
+            if file_name[-4:] not in list_video_files:
+                list_video_files.append(''.join([dir_dataset, folder, '/', file_name]))
+
+    return list_video_files
+
+
+def analyze_video_dataset(dir_dataset):
+    """
+    Analyzes a dataset of video showing the number of frames of each video
+    :param dir_dataset: (str) directory of the dataset
+    :return:
+    """
+    list_video_files  = get_video_files_in_dir(dir_dataset)
+    print(f"found {len(list_video_files)} video files")
+    num_frames = []
+    name_videos = []
+    for path_to_video in list_video_files:
+        cap = cv2.VideoCapture(path_to_video)
+        name_videos.append(path_to_video.replace(dir_dataset, ''))
+        num_frames.append(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    df = pd.DataFrame(data={"name file": name_videos, "num frames": num_frames})
 
 
 def read_mask(dir_image):
