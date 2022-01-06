@@ -29,7 +29,7 @@ def crop_center_square(frame):
     return frame[start_y : start_y + min_dim, start_x : start_x + min_dim]
 
 
-    def load_video(path, max_frames=0, resize=(IMG_SIZE, IMG_SIZE)):
+def load_video(path, max_frames=0, resize=(IMG_SIZE, IMG_SIZE)):
     cap = cv2.VideoCapture(path)
     frames = []
     try:
