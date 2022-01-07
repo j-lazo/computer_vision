@@ -5,6 +5,8 @@ from tensorflow.keras import regularizers
 from keras.layers import Convolution2D, Dense, Input, Flatten, Dropout, MaxPooling2D, BatchNormalization, \
     GlobalAveragePooling2D, Concatenate, AveragePooling2D
 
+def test():
+    pass
 
 def simple_sequential_3layers(num_classes):
 
