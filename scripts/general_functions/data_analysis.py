@@ -19,6 +19,7 @@ import re
 import string
 import sys
 import cv2
+import re
 import ast
 import shutil
 import random
@@ -79,6 +80,37 @@ def analyze_video_dataset(dir_dataset):
         num_frames.append(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     df = pd.DataFrame(data={"name file": name_videos, "num frames": num_frames})
+
+
+def find_pattern_names(string_name, str_pattern):
+    """
+    Looks for a pattern name in a string and returns the number after it
+    :param string_name: the string where to look for a pattern
+    :param str_pattern: the pattern that needs to be found
+    :return:
+    """
+    match = re.search(str_pattern + '(\d+)', string_name)
+    if match:
+        return match.group(1)
+    else:
+        return np.nan
+
+
+def analyze_dataset_patterns(dataset_dir, pattern_str):
+    """
+    Analyze a dataset to find a patter after a string
+    :param dataset_dir:
+    :param pattern_str:
+    :return:
+    """
+    list_files = os.listdir(dataset_dir)
+    unique_names = []
+    for file_name in list_files:
+        pattern = find_pattern_names(file_name, pattern_str)
+        if pattern not in unique_names:
+            unique_names.append([pattern])
+
+    return unique_names
 
 
 def read_mask(dir_image):
