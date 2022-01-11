@@ -96,6 +96,21 @@ def find_pattern_names(string_name, str_pattern):
         return np.nan
 
 
+def determine_type_procedure(file_name):
+    """
+    Determine which type of procedure is according to the name of the file
+    :param file_name:
+    :return:
+    """
+
+    types_procedures = ['cys', 'urs']
+    for kind in types_procedures:
+        if kind in file_name:
+            return kind
+
+
+
+
 def analyze_dataset_patterns(dataset_dir, pattern_str):
     """
     Analyze a dataset to find a patter after a string
@@ -107,8 +122,10 @@ def analyze_dataset_patterns(dataset_dir, pattern_str):
     unique_names = []
     for file_name in list_files:
         pattern = find_pattern_names(file_name, pattern_str)
-        if pattern not in unique_names:
-            unique_names.append([pattern])
+        type_procedure = determine_type_procedure(file_name)
+        combination = [type_procedure, pattern]
+        if combination not in unique_names:
+            unique_names.append(combination)
 
     return unique_names
 
