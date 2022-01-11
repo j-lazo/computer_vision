@@ -5,10 +5,21 @@ from tensorflow.keras import regularizers
 from keras.layers import Convolution2D, Dense, Input, Flatten, Dropout, MaxPooling2D, BatchNormalization, \
     GlobalAveragePooling2D, Concatenate, AveragePooling2D
 
-def test():
-    pass
 
-def simple_sequential_3layers(num_classes):
+def simple_FC(num_classes):
+    """
+    Simple Fully Connected Cap layer
+    :param num_classes:
+    :return:
+
+    """
+    model = Sequential()
+    model.add(GlobalAveragePooling2D())
+    model.add(Dense(num_classes, activation='softmax'))
+    return model
+
+
+def simple_3fc_(num_classes):
 
     #nclass = len(train_gen.class_indices)
     model = Sequential()
@@ -67,6 +78,7 @@ class Patches(layers.Layer):
         patch_dims = patches.shape[-1]
         patches = tf.reshape(patches, [batch_size, -1, patch_dims])
         return patches
+
 
 class PatchEncoder(layers.Layer):
     def __init__(self, num_patches, projection_dim):
