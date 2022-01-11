@@ -1,30 +1,35 @@
-from absl import app, flags, logging
-from absl.flags import FLAGS
+
 import numpy as np
 import tensorflow as tf
 import os
 import sys
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
-from tensorflow.keras import applications
-from keras.preprocessing.image import ImageDataGenerator
-sys.path.append(os.getcwd() + '/scripts/general_functions/')
-import data_management as dam
-import classification_models
 import cv2
-
 import pandas as pd
-import csv
 from matplotlib import pyplot as plt
 import datetime
 import shutil
 
+from absl import app, flags, logging
+from absl.flags import FLAGS
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
+from tensorflow.keras import applications
+from keras.preprocessing.image import ImageDataGenerator
 from sklearn.metrics import roc_curve, auc
+
+sys.path.append(os.getcwd() + '/scripts/general_functions/')
+
+import data_management as dam
+import classification_models as cms
+
+
 
 flags.DEFINE_string('name_model', '', 'name of the model')
 flags.DEFINE_string('mode', '', 'train or predict')
 flags.DEFINE_string('backbone', '', 'backbone network')
-flags.DEFINE_string('train_dataset', os.getcwd() + 'data/', 'path to dataset')
+flags.DEFINE_string('dataset_dir', os.getcwd() + 'data/', 'path to dataset')
 flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
 flags.DEFINE_string('test_dataset', '', 'path to test dataset')
 flags.DEFINE_string('results_dir', os.getcwd() + 'results/', 'path to dataset')
@@ -56,6 +61,7 @@ flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weight
                      'useful in transfer learning with different number of classes')
 flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than 1 GPU.')
 """
+
 
 class DataGenerator(tf.keras.utils.Sequence):
     # Generates data for Keras
@@ -97,7 +103,7 @@ class DataGenerator(tf.keras.utils.Sequence):
     def __data_generation(self, list_IDs_temp):
         # Generates data containing batch_size samples' # X : (n_samples, *dim, n_channels)
         # Initialization
-        x = np.empty((self.batch_size, * self.dim, self.n_channels))
+        x = np.empty((self.batch_size, self.dim, self.n_channels))
         y = np.empty((self.batch_size), dtype=int)
 
         # Generate data
@@ -128,49 +134,64 @@ def load_pretrained_model(name_model, weights='imagenet'):
     if name_model == 'VGG16':
         base_model = applications.vgg16.VGG16(include_top=False, weights=weights)
         base_model.trainable = False
+        input_size = (224, 224, 3)
 
     elif name_model == 'VGG19':
         base_model = applications.vgg19.VGG19(include_top=False, weights=weights)
         base_model.trainable = False
+        input_size = (224, 224, 3)
 
     elif name_model == 'InceptionV3':
         base_model = applications.inception_v3.InceptionV3(include_top=False, weights=weights)
         base_model.trainable = False
+        input_size = (299, 299, 3)
 
     elif name_model == 'ResNet50':
         base_model = applications.resnet50.ResNet50(include_top=False, weights=weights)
         base_model.trainable = False
+        input_size = (224, 224, 3)
 
     elif name_model == 'ResNet101':
         base_model = applications.resnet.ResNet101(include_top=False, weights=weights)
         base_model.trainable = False
+        input_size = (224, 224, 3)
 
     elif name_model == 'MobileNet':
         base_model = applications.mobilenet.MobileNet(include_top=False, weights=weights)
         base_model.trainable = False
+        input_size = (224, 224, 3)
 
     elif name_model == 'DenseNet121':
         base_model = applications.densenet.DenseNet121(include_top=False, weights=weights)
         base_model.trainable = False
+        input_size = (224, 224, 3)
 
     elif name_model == 'Xception':
         base_model = applications.xception.Xception(include_top=False, weights=weights)
         base_model.trainable = False
+        input_size = (299, 299, 3)
 
-    return base_model
+    return base_model, input_size
+
+
+def load_cap_models(name_model, num_classes):
+    if name_model == 'simple_fc':
+        cap_model = cms.simple_FC(num_classes)
+
+    return cap_model
 
 
 def load_model(name_model, backbone_model='', num_classes=1):
-
+    # initialize model
     model = Sequential()
-    if backbone_model != '':
-        base_model = load_pretrained_model(backbone_model)
-        cap_model = getattr(classification_models, name_model)(num_classes)
-        model.add(base_model)
-        model.add(cap_model)
-    else:
-        cap_model = getattr(classification_models, name_model)(num_classes)
-        model = model.add(cap_model)
+    # load the backbone
+    base_model, input_shape_backbone = load_pretrained_model(backbone_model)
+    base_model.trainable = False
+    # load the cap
+    cap_model = load_cap_models(name_model, num_classes)
+    model.add(base_model)
+    model.add(cap_model)
+
     return model
 
 
@@ -188,17 +209,17 @@ def generate_dict_x_y(general_dict):
     return dict_x, dict_y, unique_values
 
 
-def load_data(data_dir, backbone_model, img_size=(255,255), batch_size=8):
+def load_data(data_dir, backbone_model, img_size=(255, 255), batch_size=8):
 
-    data_dictionary = dam.build_dictionary_data_labels(data_dir)
+    #data_dictionary = dam.build_dictionary_data_labels(data_dir)
     # ------generators to feed the model----------------
 
     if backbone_model != '':
 
-        dataframe = pd.DataFrame(data_dictionary).T
+        #dataframe = pd.DataFrame(data_dictionary).T
 
         if backbone_model == 'VGG16':
-            data_idg = ImageDataGenerator(preprocessing_function= tf.keras.applications.vgg16.preprocess_input)
+            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.vgg16.preprocess_input)
             img_width, img_height = 224, 224
 
         elif backbone_model == 'VGG19':
@@ -235,6 +256,7 @@ def load_data(data_dir, backbone_model, img_size=(255,255), batch_size=8):
                                                   class_mode='categorical',
                                                       x_col='image_dir',
                                                       y_col='classification')
+
         num_classes = dataframe['classification'].nunique()
 
     else:
@@ -250,22 +272,27 @@ def load_data(data_dir, backbone_model, img_size=(255,255), batch_size=8):
     return data_generator, num_classes
 
 
-def train_model(model):
-
-    return model
-
+def train_model(model, training_generator, validation_generator, epochs, batch_size,
+                shuffle=1, verbose=1):
 
 
-def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validation_data_dir='',
+    trained_model = model.fit(training_generator,
+              epochs=epochs,
+              shuffle=shuffle,
+              batch_size=batch_size,
+              validation_data=validation_generator,
+              verbose=verbose)
+
+    return trained_model
+
+
+def call_models(name_model, mode, data_dir=os.getcwd() + 'data/', validation_data_dir='',
                 test_data='', results_dir=os.getcwd() + 'results/', epochs=2, batch_size=4, learning_rate=0.001,
                 backbone_model=''):
 
-    # Define Generators
-    training_generator, num_classes = load_data(train_data_dir, backbone_model,batch_size=batch_size)
-    validation_generator, num_classes = load_data(validation_data_dir, backbone_model)
-
     # load the model
-    model = load_model(name_model, backbone_model, num_classes)
+
+    model = load_model(name_model, backbone_model)
     model.summary()
     adam = Adam(learning_rate=learning_rate)
     sgd = SGD(learning_rate=learning_rate, momentum=0.9)
@@ -275,20 +302,23 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
     # then decide how to act according to the mode
     if mode == 'train':
 
-        # Train the model
-        model.fit(training_generator,
-                  epochs=epochs,
-                  shuffle=1,
-                  batch_size=batch_size,
-                  validation_data=validation_generator,
-                  validation_batch_size=batch_size,
-                  verbose=1)
+        # define a dir to save the results and Checkpoints
 
-    elif mode == 'predict':
+        # Define Generators
+        training_generator, num_classes = load_data(data_dir, backbone_model,
+                                                    batch_size=batch_size)
+        validation_generator, num_classes = load_data(validation_data_dir, backbone_model,
+                                                      batch_size=batch_size)
+
+        # Train the model
+        model_history = train_model(model, training_generator, validation_generator, epochs, batch_size)
+
+    #### 2 FIX LATER
+    """elif mode == 'predict':
         test_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
         test_gen = test_idg.flow_from_directory(validation_data_dir,
                                                      target_size=(img_width, img_height),
-                                                     batch_size=50)
+                                                     batch_size=16)
 
         evaluation = model.evaluate(test_gen, verbose=True, steps=10)
         prediction = model.predict(test_gen, verbose=True, steps=1)
@@ -297,7 +327,7 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
         # for i in test_gen[0]:
         #    idx = (test_gen.batch_index - 1) * test_gen.batch_size
         #    print(test_gen.filenames[idx: idx + test_gen.batch_size])
-        """
+        0
         x_0 = [x[0] for x in predicts]
         x_1 = [x[1] for x in predicts]
         names = [os.path.basename(x) for x in test_gen.filenames]
@@ -532,22 +562,24 @@ def call_models(name_model, mode, train_data_dir=os.getcwd() + 'data/', validati
     plt.show()"""
 
 
-def experiment_1(_argv):
-    pass
-
-
 def main(_argv):
 
     name_model = FLAGS.name_model
     mode = FLAGS.mode
     backbone_model = FLAGS.backbone
-    dataset_dir = FLAGS.train_dataset
-    val_dataset_dir = FLAGS.val_dataset
+    data_dir = FLAGS.dataset_dir
+    val_data = FLAGS.val_dataset
+    batch_zie = FLAGS.batch_size
+
 
     print('INFORMATION:', name_model, backbone_model, mode)
-    call_models(name_model, mode, train_data_dir=dataset_dir, backbone_model=backbone_model,
-                validation_data_dir=val_dataset_dir)
-
+    """
+    e.g: 
+    call_models.py --name_model=simple_fc --backbone=VGG19 --mode=train backbone_model= --batch_zie=4
+    --train_data_dir=directory/to/train/data --validation_data_dir=directory/to/validation/data
+    """
+    call_models(name_model, mode, data_dir=data_dir, backbone_model=backbone_model,
+                batch_size=batch_zie, validation_data_dir=val_data)
 
 
 if __name__ == '__main__':
