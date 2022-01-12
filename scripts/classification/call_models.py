@@ -17,6 +17,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
 from tensorflow.keras import applications
 from keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
+
 from sklearn.metrics import roc_curve, auc
 
 sys.path.append(os.getcwd() + '/scripts/general_functions/')
@@ -121,6 +123,28 @@ class DataGenerator(tf.keras.utils.Sequence):
 
         return x, tf.keras.utils.to_categorical(y, num_classes=self.n_classes)
 
+
+def generate_experiment_ID(name_model, learning_rate, batch_size, backbone_model=''):
+    """
+    Generate a ID name for the experiment considering the name of the model, the learning rate,
+    the batch size, and the date of the experiment
+
+    :param name_model: (str)
+    :param learning_rate: (float)
+    :param batch_size: (int)
+    :param backbone_model: (str)
+    :return: (str) id name
+    """
+    training_starting_time = datetime.datetime.now()
+    if backbone_model != '':
+        name_mod = ''.join([name_model, '+', backbone_model])
+    else:
+        name_mod = name_model
+    id_name = ''.join([name_mod, '_lr_', str(learning_rate),
+                              '_bs_', str(batch_size), '_',
+                              training_starting_time.strftime("%d_%m_%Y_%H_%M")
+                              ])
+    return id_name
 
 def load_pretrained_model(name_model, weights='imagenet'):
 
@@ -250,9 +274,7 @@ def load_data(data_dir, annotations_file='', backbone_model='',
 
     if annotations_file == '':
         # determine if the structure of the directory is divided by classes or there is an annotation file
-        print(os.listdir(data_dir))
         files_dir = [f for f in os.listdir(data_dir) if os.path.isdir(data_dir+f)]
-        print(files_dir)
         num_classes = len(files_dir)
         # if the number of sub-folders is less than two then it supposes that
         # there is an annotation file in .csv format and looks for it
@@ -286,23 +308,70 @@ def load_data(data_dir, annotations_file='', backbone_model='',
     return data_generator, num_classes
 
 
-def train_model(model, training_generator, validation_generator, epochs, batch_size,
-                shuffle=1, verbose=1):
-
+def train_model(model, training_generator, validation_generator, epochs,
+                batch_size, results_directory, new_results_id, shuffle=1, verbose=1):
+    callbacks = [
+        ModelCheckpoint(results_directory + new_results_id + "_model.h5",
+                        monitor="val_loss", save_best_only=True),
+        ReduceLROnPlateau(monitor='val_loss', patience=25),
+        CSVLogger(results_directory + 'train_history_' + new_results_id + "_.csv"),
+        TensorBoard(),
+        EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)]
 
     trained_model = model.fit(training_generator,
               epochs=epochs,
               shuffle=shuffle,
               batch_size=batch_size,
               validation_data=validation_generator,
-              verbose=verbose)
+              verbose=verbose,
+              callbacks=callbacks)
 
     return trained_model
 
 
-def call_models(name_model, mode, data_dir=os.getcwd() + 'data/', validation_data_dir='',
-                test_data='', results_dir=os.getcwd() + 'results/', epochs=2, batch_size=4, learning_rate=0.001,
-                backbone_model=''):
+def evaluate_and_predict(model, directory_to_evaluate, results_directory,
+                         output_name='', results_id='', backbone_model='', batch_size=8,
+                         predict=False):
+    print(f'Evaluation of {directory_to_evaluate}')
+    output_directory = 'predictions/' + output_name + '/'
+
+    # load the data to evaluate and predict
+    print(directory_to_evaluate)
+    data_gen, ene = load_data(directory_to_evaluate, backbone_model=backbone_model,
+                                  batch_size=batch_size)
+
+    evaluation = model.evaluate(data_gen, verbose=True, steps=1)
+    print('EVALUATION', evaluation)
+
+    predictions = model.predict(data_gen, verbose=True, steps=1)
+
+
+
+    x_0 = [x[0] for x in predictions]
+    x_1 = [x[1] for x in predictions]
+    #names = [os.path.basename(x) for x in data_gen.filenames]
+
+    predicts = np.argmax(predictions, axis=1)
+    label_index = {v: k for k, v in data_gen.class_indices.items()}
+    predicts = [label_index[p] for p in predicts]
+
+    df = pd.DataFrame(columns=['fname', 'class_1', 'class_2', 'over all'])
+    df['fname'] = [os.path.basename(x) for x in data_gen.filenames]
+    df['class_1'] = x_0
+    df['class_2'] = x_1
+    df['over all'] = predicts
+    # save the predictions  of each case
+    name_csv_file = ''.join([results_directory, '/predictions_', results_id, '_.csv'])
+    df.to_csv(name_csv_file, index=False)
+
+    return name_csv_file
+
+
+
+def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_data_dir='',
+                test_data='', results_dir=os.getcwd() + '/results/', epochs=2, batch_size=4, learning_rate=0.001,
+                backbone_model='', eval_val_set=False, eval_train_set=False, predict_val=False,
+                predict_train=False):
 
     # Determine what is the structure of the data directory, if the directory contains train/val datasets
     if validation_data_dir == '':
@@ -326,265 +395,64 @@ def call_models(name_model, mode, data_dir=os.getcwd() + 'data/', validation_dat
 
         # load the model
         model = load_model(name_model, backbone_model, num_classes)
-        model.summary()
         adam = Adam(learning_rate=learning_rate)
         sgd = SGD(learning_rate=learning_rate, momentum=0.9)
         metrics = ["accuracy",  tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
         model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=metrics)
+        model.summary()
 
         # define a dir to save the results and Checkpoints
+        # if results directory doesn't exists create it
+        if not os.path.isdir(results_dir):
+            os.mkdir(results_dir)
 
+        # ID name for the folder and results
+        new_results_id = generate_experiment_ID(name_model,learning_rate, batch_size,
+                                                backbone_model=backbone_model)
 
+        results_directory = ''.join([results_dir, new_results_id, '/'])
+        # if results experiment doesn't exists create it
+        if not os.path.isdir(results_directory):
+            os.mkdir(results_directory)
+
+        # track time
+        start_time = datetime.datetime.now()
         # Train the model
-        model_history = train_model(model, training_generator, validation_generator, epochs, batch_size)
+        trained_model = train_model(model, training_generator, validation_generator, epochs,
+                    batch_size, results_directory, new_results_id)
 
-    #### 2 FIX LATER
-    """elif mode == 'predict':
-        test_idg = ImageDataGenerator(preprocessing_function=preprocess_input)
-        test_gen = test_idg.flow_from_directory(validation_data_dir,
-                                                     target_size=(img_width, img_height),
-                                                     batch_size=16)
+        model.save(results_directory + new_results_id + '_model')
 
-        evaluation = model.evaluate(test_gen, verbose=True, steps=10)
-        prediction = model.predict(test_gen, verbose=True, steps=1)
+        print('Total Training TIME:', (datetime.datetime.now() - start_time))
+        print('METRICS Considered:')
+        print(trained_model.history.keys())
+        # in case evaluate val dataset is True
+        if eval_val_set is True:
+            evaluate_and_predict(model, validation_data_dir, results_directory,
+                                 results_id=new_results_id, output_name='val',
+                                 backbone_model=backbone_model, predict=False)
 
-        # top print the names in each batch of the generator
-        # for i in test_gen[0]:
-        #    idx = (test_gen.batch_index - 1) * test_gen.batch_size
-        #    print(test_gen.filenames[idx: idx + test_gen.batch_size])
-        0
-        x_0 = [x[0] for x in predicts]
-        x_1 = [x[1] for x in predicts]
-        names = [os.path.basename(x) for x in test_gen.filenames]
-        print(len(x_0), len(names))
+        if eval_train_set is True:
+            evaluate_and_predict(model, train_data_dir, results_directory,
+                                 results_id=new_results_id, output_name='train',
+                                 backbone_model=backbone_model, predict=False)
+        if test_data != '':
+            # determine if there are sub_folders or if it's the absolute path of the dataset
+            sub_dirs = [f for f in os.listdir(test_data) if os.path.isdir(test_data + f)]
+            if sub_dirs != []:
+                for sub_dir in sub_dirs:
+                    name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
+                                         results_id=new_results_id, output_name=sub_dir,
+                                         backbone_model=backbone_model, predict=True)
+                    print(f'Evaluation results saved at {name_file}')
+            else:
+                name_file = evaluate_and_predict(model, test_data, results_directory,
+                                     results_id=new_results_id, output_name='test',
+                                     backbone_model=backbone_model, predict=True)
+                print(f'Evaluation results saved at {name_file}')
 
-        predicts = np.argmax(predicts, axis=1)
-        label_index = {v: k for k, v in train_gen.class_indices.items()}
-        predicts = [label_index[p] for p in predicts]
-
-        df = pd.DataFrame(columns=['class_1', 'class_2', 'fname', 'over all'])
-        df['fname'] = [os.path.basename(x) for x in test_gen.filenames]
-        df['class_1'] = x_0
-        df['class_2'] = x_1
-        df['over all'] = predicts
-
-    else:
-        print('No mode defined')
-    # ------generators to feed the model----------------
-
-    train_gen = train_idg.flow_from_directory(train_data_dir,
-                                              target_size=(img_width, img_height),
-                                              batch_size=20)
-
-    validation_gen = val_idg.flow_from_directory(validation_data_dir,
-                                                 target_size=(img_width, img_height),
-                                                 batch_size=20)
-
-    # build the ResNet50 network
-    base_model = applications.ResNet50(include_top=False, weights='imagenet')
-    base_model.trainable = False
-    base_model.summary()
-
-    for layer in base_model.layers[:-4]:
-        layer.trainable = False
-
-    for layer in base_model.layers[-4:]:
-        layer.trainable = True
-
-    model.compile(loss='categorical_crossentropy',
-                  optimizer=adam,
-                  metrics=metrics)
-
-    # model.summary()
-    epochs = 25
-    history = model.fit(train_gen,
-                        epochs=epochs,
-                        shuffle=1,
-                        batch_size=25,
-                        validation_batch_size=25,
-                        validation_data=validation_gen,
-                        verbose=1)
-
-    # --------------- evaluate the model -----------------
-
-    validation_gen = val_idg.flow_from_directory(validation_data_dir,
-                                                 target_size=(img_width, img_height),
-                                                 batch_size=50)
-
-    evaluation = model.evaluate(validation_gen, verbose=True, steps=10)
-    print('VALIDATION dataset')
-    print(metrics)
-    print(evaluation)"""
-
-    # -------------------------predictions on the validation set --------------------------
-    """
-    va_gen2 = test_idg2.flow_from_directory(validation_data_dir,
-                                            target_size=(img_width, img_height),
-                                            shuffle=False,
-                                            batch_size=10)
-
-    predict3 = model.predict_generator(va_gen2, verbose=True, steps=1)
-    x_0 = [x[0] for x in predict3]
-    x_1 = [x[1] for x in predict3]
-    names = [os.path.basename(x) for x in va_gen2.filenames[:]]
-    print(len(x_0), len(names))
-
-    predict3 = np.argmax(predict3, axis=1)
-    label_index = {v: k for k, v in va_gen2.class_indices.items()}
-    predict3 = [label_index[p] for p in predict3]
-    
-    ## ------------- save the weights ------------------
-    date = datetime.datetime.strftime(datetime.datetime.today(), '%Y%m%d-%Hh%mm')
-
-    results_directory = ''.join([results_dir, date, '/'])
-
-    if not (os.path.isdir(results_directory)):
-        os.mkdir(results_directory)
-
-    model.save_weights(
-        ''.join([results_directory, 'weights_resnet50_', data, '_', str(epochs), 'e_', fold, '_.h5']), True)
-
-    # ----------------- save results ---------------------------
-
-    with open(''.join([results_directory, 'resume_training_', data, '_', fold, '_', '_.csv']), 'w') as csvfile:
-        writer = csv.writer(csvfile, delimiter=',')
-        writer.writerow(['Acc', 'Val_acc', 'Loss', 'Val_Loss'])
-        for i, num in enumerate(history.history['accuracy']):
-            writer.writerow(
-                [num, history.history['val_accuracy'][i], history.history['loss'][i], history.history['val_loss'][i]])
-
-    for case in test_data:
-
-        if data == 'all':
-            if case[:3] == 'cys':
-                all_cases_dir = all_cases_dir.replace('urs/', 'cys/')
-            elif case[:3] == 'urs':
-                all_cases_dir = all_cases_dir.replace('all/', 'urs/')
-
-        test_data_dir = all_cases_dir + case
-        subdirs = os.listdir(test_data_dir)
-        total_all_imgs = 0
-        for subdir in subdirs:
-            all_imgs = os.listdir(''.join([test_data_dir, '/', subdir, '/']))
-            total_all_imgs = total_all_imgs + len(all_imgs)
-
-        # if total_all_imgs > 350:
-        #    total_all_imgs = 350
-
-        test_gen = test_idg.flow_from_directory(test_data_dir,
-                                                target_size=(img_width, img_height),
-                                                shuffle=False,
-                                                batch_size=total_all_imgs)
-
-        evaluation_test = model.evaluate(test_gen, verbose=True, steps=1)
-        print('TEST ', case)
-        print(['loss', 'acc', 'prec', 'rec'])
-        print(evaluation_test)
-
-        ###-----------------------lets make predictions-------------------
-        predicts = model.predict(test_gen, verbose=True, steps=1)
-
-        # top print the names in each batch of the generator
-        # for i in test_gen[0]:
-        #    idx = (test_gen.batch_index - 1) * test_gen.batch_size
-        #    print(test_gen.filenames[idx: idx + test_gen.batch_size])
-
-        x_0 = [x[0] for x in predicts]
-        x_1 = [x[1] for x in predicts]
-        names = [os.path.basename(x) for x in test_gen.filenames]
-        print(len(x_0), len(names))
-
-        predicts = np.argmax(predicts, axis=1)
-        label_index = {v: k for k, v in train_gen.class_indices.items()}
-        predicts = [label_index[p] for p in predicts]
-
-        df = pd.DataFrame(columns=['class_1', 'class_2', 'fname', 'over all'])
-        df['fname'] = [os.path.basename(x) for x in test_gen.filenames]
-        df['class_1'] = x_0
-        df['class_2'] = x_1
-        df['over all'] = predicts
-        # save the predictions  of each case
-        name_save_predictions_1 = ''.join(
-            [results_directory, 'predictions_ResNet50_', data, '_', case, '.csv'])
-        df.to_csv(name_save_predictions_1, index=False)
-
-        # -----------now lets calculate the AUC---------------------------------
-
-        ground_truth_directory = ''
-        case_test = case
-        real_test = ''.join([ground_truth_directory, case_test, '.csv'])
-        print('test file csv', real_test)
-        auc = calculate_auc_and_roc(name_save_predictions_1, real_test, case_test, plot=True)
-        print(case_test, 'AUC:', auc)
-
-    if test_data_2 != []:
-
-        for case in test_data_2:
-            if data == 'cys':
-                all_cases_dir = all_cases_dir.replace('cys/', 'urs/')
-            elif data == 'urs':
-                all_cases_dir = all_cases_dir.replace('urs/', 'cys/')
-
-            test_data_dir = all_cases_dir + case
-            subdirs = os.listdir(test_data_dir)
-            total_all_imgs = 0
-            for subdir in subdirs:
-                all_imgs = os.listdir(''.join([test_data_dir, '/', subdir, '/']))
-                total_all_imgs = total_all_imgs + len(all_imgs)
-
-            # if total_all_imgs > 350:
-            #    total_all_imgs = 350
-
-            test_gen = test_idg.flow_from_directory(test_data_dir,
-                                                    target_size=(img_width, img_height),
-                                                    shuffle=False,
-                                                    batch_size=total_all_imgs)
-
-            evaluation_test = model.evaluate(test_gen, verbose=True, steps=1)
-            print('TEST ', case)
-            print(['loss', 'acc', 'prec', 'rec'])
-            print(evaluation_test)
-
-            ###-----------------------lets make predictions-------------------
-            predicts = model.predict(test_gen, verbose=True, steps=1)
-
-            # top print the names in each batch of the generator
-            # for i in test_gen[0]:
-            #    idx = (test_gen.batch_index - 1) * test_gen.batch_size
-            #    print(test_gen.filenames[idx: idx + test_gen.batch_size])
-
-            x_0 = [x[0] for x in predicts]
-            x_1 = [x[1] for x in predicts]
-            names = [os.path.basename(x) for x in test_gen.filenames]
-            print(len(x_0), len(names))
-
-            predicts = np.argmax(predicts, axis=1)
-            label_index = {v: k for k, v in train_gen.class_indices.items()}
-            predicts = [label_index[p] for p in predicts]
-
-            df = pd.DataFrame(columns=['class_1', 'class_2', 'fname', 'over all'])
-            df['fname'] = [os.path.basename(x) for x in test_gen.filenames]
-            df['class_1'] = x_0
-            df['class_2'] = x_1
-            df['over all'] = predicts
-            # save the predictions  of each case
-            name_save_predictions_1 = ''.join(
-                [results_directory, 'predictions_ResNet50_', data, '_',case])
-            df.to_csv(name_save_predictions_1, index=False)
-
-            # -----------now lets calculate the AUC---------------------------------
-
-            ground_truth_directory = ''
-            case_test = case
-            real_test = ''.join([ground_truth_directory, case_test, '.csv'])
-            print('test file csv', real_test)
-            auc = calculate_auc_and_roc(name_save_predictions_1, real_test, case_test, plot=True)
-            print(case_test, 'AUC:', auc)
-
-        plt.show()
-
-    print('results dir:', results_directory)
-    plt.show()"""
+    elif mode == 'predict':
+        pass
 
 
 def main(_argv):
@@ -595,15 +463,17 @@ def main(_argv):
     data_dir = FLAGS.dataset_dir
     val_data = FLAGS.val_dataset
     batch_zie = FLAGS.batch_size
+    epochs = FLAGS.epochs
+    test_data = FLAGS.test_dataset
 
-    print('INFORMATION:', name_model, backbone_model, mode)
     """
     e.g: 
     call_models.py --name_model=simple_fc --backbone=VGG19 --mode=train backbone_model= --batch_zie=4
-    --train_data_dir=directory/to/train/data --validation_data_dir=directory/to/validation/data
+    --dataset_dir=directory/to/train/data/ --batch_size=16  
     """
+    print('INFORMATION:', name_model, backbone_model, mode)
     call_models(name_model, mode, data_dir=data_dir, backbone_model=backbone_model,
-                batch_size=batch_zie, validation_data_dir=val_data)
+                batch_size=batch_zie, epochs=epochs, test_data=test_data)
 
 
 if __name__ == '__main__':
