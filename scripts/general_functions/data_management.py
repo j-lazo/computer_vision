@@ -303,7 +303,13 @@ def augment_dataset(files_path, destination_path='', visualize_augmentation=Fals
 
 
 def check_folder_exists(folder_dir, create_folder=False):
-
+    """
+    Checks if a directory exits. If the flag create folder is selected it creates the sub-folders 'images' and 'masks'
+    inside the created directory
+    :param folder_dir: The directory path to determine its existance or not
+    :param create_folder: a flag to determine if the sub-structure images and mask should be created
+    :return:
+    """
     if not(os.path.isdir(folder_dir)):
         exists = False
         if create_folder is True:
@@ -339,13 +345,12 @@ def generate_training_and_validation_sets(input_directory, output_directory,
                                           training_percentage=0.5, test_dataset='False',
                                           input_sub_dirs=[], pairs_of_data=[], convert_data=[]):
 
-    print(test_dataset)
     """
     By default splits an image and mask dataset into training/validation with a 0.5/0.5 rate
     If test dataset is selected, the percentage for each of them should be input in list form.
     By default it considers that input directory contains two folders: images and masks, where masks
     and images have the same name.
-    If several sources of input data folders are considers use
+    If several sources of input data folders are considered used
     :param input_directory: A directory where the dataset to be split is located
     :param output_directory: Location of the output directory
     :param test_dataset: (bool) False by default. Splits the dataset into train/val/test
