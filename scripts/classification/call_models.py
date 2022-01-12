@@ -209,15 +209,10 @@ def generate_dict_x_y(general_dict):
     return dict_x, dict_y, unique_values
 
 
-def load_data(data_dir, backbone_model, img_size=(255, 255), batch_size=8):
-
-    #data_dictionary = dam.build_dictionary_data_labels(data_dir)
-    # ------generators to feed the model----------------
-
+def load_data(data_dir, annotations_file='', backbone_model='',
+              img_size=(255, 255), batch_size=8):
+    # If using a pre-trained backbone model, then use the img data generator from the pretrained model
     if backbone_model != '':
-
-        #dataframe = pd.DataFrame(data_dictionary).T
-
         if backbone_model == 'VGG16':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.vgg16.preprocess_input)
             img_width, img_height = 224, 224
@@ -250,16 +245,35 @@ def load_data(data_dir, backbone_model, img_size=(255, 255), batch_size=8):
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.xception.preprocess_input)
             img_width, img_height = 299, 299
 
-        data_generator = data_idg.flow_from_dataframe(dataframe,
-                                                  target_size=(img_width, img_height),
-                                                  batch_size=batch_size,
-                                                  class_mode='categorical',
-                                                      x_col='image_dir',
-                                                      y_col='classification')
-
-        num_classes = dataframe['classification'].nunique()
-
     else:
+        pass
+
+    if annotations_file == '':
+        # determine if the structure of the directory is divided by classes or there is an annotation file
+        print(os.listdir(data_dir))
+        files_dir = [f for f in os.listdir(data_dir) if os.path.isdir(data_dir+f)]
+        print(files_dir)
+        num_classes = len(files_dir)
+        # if the number of sub-folders is less than two then it supposes that
+        # there is an annotation file in .csv format and looks for it
+        if num_classes < 2:
+            list_csv_files = [f for f in os.listdir(data_dir) if os.path.isdir(f)]
+            if not list_csv_files:
+                print('No annotation files found or directory with sub-classes found')
+            else:
+                csv_annotations_file = list_csv_files.pop()
+                dataframe = pd.read_csv(data_dir + csv_annotations_file)
+
+        else:
+            data_generator = data_idg.flow_from_directory(data_dir,
+                                                          batch_size=batch_size,
+                                                          class_mode='categorical',
+                                                          target_size=(img_width, img_height))
+            num_classes = len(data_generator.class_indices)
+    else:
+        # read the annotations from a csv file
+        dataframe = pd.read_csv(data_dir + annotations_file)
+        data_dictionary = dam.build_dictionary_data_labels(data_dir)
         # Parameters
         data, labels, num_classes = generate_dict_x_y(data_dictionary)
         params = {'dim': img_size,
@@ -267,7 +281,7 @@ def load_data(data_dir, backbone_model, img_size=(255, 255), batch_size=8):
                   'n_classes': num_classes,
                   'n_channels': 3,
                   'shuffle': True}
-        data_generator = DataGenerator(data, labels, params)
+        data_generator = DataGenerator(data, labels, params, annotations_file)
 
     return data_generator, num_classes
 
@@ -290,25 +304,36 @@ def call_models(name_model, mode, data_dir=os.getcwd() + 'data/', validation_dat
                 test_data='', results_dir=os.getcwd() + 'results/', epochs=2, batch_size=4, learning_rate=0.001,
                 backbone_model=''):
 
-    # load the model
+    # Determine what is the structure of the data directory, if the directory contains train/val datasets
+    if validation_data_dir == '':
+        sub_dirs = os.listdir(data_dir)
+        if 'train' in sub_dirs:
+            train_data_dir = data_dir + 'train/'
 
-    model = load_model(name_model, backbone_model)
-    model.summary()
-    adam = Adam(learning_rate=learning_rate)
-    sgd = SGD(learning_rate=learning_rate, momentum=0.9)
-    metrics = ["accuracy", tf.keras.metrics.Recall(), tf.keras.metrics.Precision()]
-    model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=metrics)
+        if 'val' in sub_dirs:
+            validation_data_dir = data_dir + 'val/'
+        else:
+            print(f'not recognized substructure found in {data_dir}, please indicate the validation dataset')
 
-    # then decide how to act according to the mode
+    # Decide how to act according to the mode (train/predict)
     if mode == 'train':
+
+        # Define Generators
+        training_generator, num_classes = load_data(train_data_dir, backbone_model=backbone_model,
+                                                    batch_size=batch_size)
+        validation_generator, num_classes = load_data(validation_data_dir, backbone_model=backbone_model,
+                                                      batch_size=batch_size)
+
+        # load the model
+        model = load_model(name_model, backbone_model, num_classes)
+        model.summary()
+        adam = Adam(learning_rate=learning_rate)
+        sgd = SGD(learning_rate=learning_rate, momentum=0.9)
+        metrics = ["accuracy",  tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
+        model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=metrics)
 
         # define a dir to save the results and Checkpoints
 
-        # Define Generators
-        training_generator, num_classes = load_data(data_dir, backbone_model,
-                                                    batch_size=batch_size)
-        validation_generator, num_classes = load_data(validation_data_dir, backbone_model,
-                                                      batch_size=batch_size)
 
         # Train the model
         model_history = train_model(model, training_generator, validation_generator, epochs, batch_size)
@@ -570,7 +595,6 @@ def main(_argv):
     data_dir = FLAGS.dataset_dir
     val_data = FLAGS.val_dataset
     batch_zie = FLAGS.batch_size
-
 
     print('INFORMATION:', name_model, backbone_model, mode)
     """
