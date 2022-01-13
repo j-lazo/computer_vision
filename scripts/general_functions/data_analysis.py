@@ -25,6 +25,38 @@ import shutil
 import random
 
 
+def calculate_auc_and_roc(predicted, real, case_name, plot=False):
+    y_results, names = load_predictions(predicted)
+    y_2test, names_test = load_labels(real)
+
+    y_test = []
+    y_pred = []
+
+    print(len(y_results), len(names))
+    print(len(y_2test), len(names_test))
+
+    for i, name in enumerate(names):
+        for j, other_name in enumerate(names_test):
+            if name == other_name:
+                y_pred.append(float(y_results[i]))
+                y_test.append(int(y_2test[j]))
+
+    fpr_keras, tpr_keras, thresholds_keras = roc_curve(y_test, y_pred)
+
+    auc_keras = auc(fpr_keras, tpr_keras)
+    if plot is True:
+        plt.figure()
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.plot(fpr_keras, tpr_keras, label=case_name + '(area = {:.3f})'.format(auc_keras))
+        # plt.plot(fpr_rf, tpr_rf, label='RF (area = {:.3f})'.format(auc_rf))
+        plt.xlabel('False positive rate')
+        plt.ylabel('True positive rate')
+        plt.title('ROC curve')
+        plt.legend(loc='best')
+
+    return auc_keras
+
+
 def check_file_isvid(filename):
     """
     checks if a file has a video extension, accepted files are: '.mp4', '.mpg', '.avi'
