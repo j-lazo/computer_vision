@@ -24,6 +24,7 @@ from sklearn.metrics import roc_curve, auc
 sys.path.append(os.getcwd() + '/scripts/general_functions/')
 
 import data_management as dam
+import data_analysis as daa
 import classification_models as cms
 
 
@@ -39,7 +40,7 @@ flags.DEFINE_integer('epochs', 1, 'number of epochs')
 flags.DEFINE_integer('batch_size', 4, 'batch size')
 flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
-
+flags.DEFINE_string('analyze_data', False,  'select if analyze data or not')
 
 """
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
@@ -234,7 +235,7 @@ def generate_dict_x_y(general_dict):
 
 
 def load_data(data_dir, annotations_file='', backbone_model='',
-              img_size=(255, 255), batch_size=8):
+              img_size=(255, 255), batch_size=8, prediction_mode=False):
     # If using a pre-trained backbone model, then use the img data generator from the pretrained model
     if backbone_model != '':
         if backbone_model == 'VGG16':
@@ -287,10 +288,23 @@ def load_data(data_dir, annotations_file='', backbone_model='',
                 dataframe = pd.read_csv(data_dir + csv_annotations_file)
 
         else:
-            data_generator = data_idg.flow_from_directory(data_dir,
+            if prediction_mode is True:
+                subdirs = [f for f in os.listdir(data_dir) if os.path.isdir(data_dir + f)]
+                total_all_imgs = 0
+                for subdir in subdirs:
+                    all_imgs = os.listdir(''.join([data_dir, subdir, '/']))
+                    total_all_imgs = total_all_imgs + len(all_imgs)
+                    data_generator = data_idg.flow_from_directory(data_dir,
+                                                                  batch_size=total_all_imgs,
+                                                                  class_mode='categorical',
+                                                                  target_size=(img_width, img_height))
+
+            else:
+                data_generator = data_idg.flow_from_directory(data_dir,
                                                           batch_size=batch_size,
                                                           class_mode='categorical',
                                                           target_size=(img_width, img_height))
+
             num_classes = len(data_generator.class_indices)
     else:
         # read the annotations from a csv file
@@ -330,23 +344,21 @@ def train_model(model, training_generator, validation_generator, epochs,
 
 
 def evaluate_and_predict(model, directory_to_evaluate, results_directory,
-                         output_name='', results_id='', backbone_model='', batch_size=8,
-                         predict=False):
+                         output_name='', results_id='', backbone_model='', batch_size=1,
+                         analyze_data=False, output_dir=''):
     print(f'Evaluation of {directory_to_evaluate}')
-    output_directory = 'predictions/' + output_name + '/'
-
     # load the data to evaluate and predict
-    print(directory_to_evaluate)
     data_gen, ene = load_data(directory_to_evaluate, backbone_model=backbone_model,
-                                  batch_size=batch_size)
+                                  batch_size=batch_size, prediction_mode=True)
 
     evaluation = model.evaluate(data_gen, verbose=True, steps=1)
-    print('EVALUATION', evaluation)
+    print('Performance:')
+    print(evaluation)
 
     predictions = model.predict(data_gen, verbose=True, steps=1)
+    print(np.shape(predictions))
 
-
-
+    # 2DO: modify this to handle N classes
     x_0 = [x[0] for x in predictions]
     x_1 = [x[1] for x in predictions]
     #names = [os.path.basename(x) for x in data_gen.filenames]
@@ -354,24 +366,25 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     predicts = np.argmax(predictions, axis=1)
     label_index = {v: k for k, v in data_gen.class_indices.items()}
     predicts = [label_index[p] for p in predicts]
-
+    print(predicts)
     df = pd.DataFrame(columns=['fname', 'class_1', 'class_2', 'over all'])
     df['fname'] = [os.path.basename(x) for x in data_gen.filenames]
     df['class_1'] = x_0
     df['class_2'] = x_1
     df['over all'] = predicts
     # save the predictions  of each case
-    name_csv_file = ''.join([results_directory, '/predictions_', results_id, '_.csv'])
+    name_csv_file = ''.join([results_directory, '/predictions_', output_name, '_', results_id, '_.csv'])
     df.to_csv(name_csv_file, index=False)
+
+    if analyze_data is True:
+        auc_val = daa.calculate_auc_and_roc(predictions, real_values, output_name, plot=False)
 
     return name_csv_file
 
 
-
 def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_data_dir='',
                 test_data='', results_dir=os.getcwd() + '/results/', epochs=2, batch_size=4, learning_rate=0.001,
-                backbone_model='', eval_val_set=False, eval_train_set=False, predict_val=False,
-                predict_train=False):
+                backbone_model='', eval_val_set=False, eval_train_set=False, analyze_data=False):
 
     # Determine what is the structure of the data directory, if the directory contains train/val datasets
     if validation_data_dir == '':
@@ -439,17 +452,30 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
         if test_data != '':
             # determine if there are sub_folders or if it's the absolute path of the dataset
             sub_dirs = [f for f in os.listdir(test_data) if os.path.isdir(test_data + f)]
-            if sub_dirs != []:
+            if sub_dirs:
                 for sub_dir in sub_dirs:
-                    name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
-                                         results_id=new_results_id, output_name=sub_dir,
-                                         backbone_model=backbone_model, predict=True)
-                    print(f'Evaluation results saved at {name_file}')
+                    sub_sub_dirs = [f for f in os.listdir(test_data + sub_dir) if os.path.isdir(test_data + sub_dir + f)]
+                    if sub_sub_dirs:
+                        # this means that inside each sub-dir there is more directories so we can iterate over the previous one
+                        name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
+                                             results_id=new_results_id, output_name=sub_dir,
+                                             backbone_model=backbone_model, predict=True,
+                                             analyze_data=analyze_data)
+
+                        print(f'Evaluation results saved at {name_file}')
+                    else:
+                        name_file = evaluate_and_predict(model, test_data, results_directory,
+                                                         results_id=new_results_id, output_name='test',
+                                                         backbone_model=backbone_model, predict=True,
+                                                         analyze_data=analyze_data)
+                        print(f'Evaluation results saved at {name_file}')
+
             else:
                 name_file = evaluate_and_predict(model, test_data, results_directory,
                                      results_id=new_results_id, output_name='test',
-                                     backbone_model=backbone_model, predict=True)
+                                     backbone_model=backbone_model, predict=True, analyze_data=analyze_data)
                 print(f'Evaluation results saved at {name_file}')
+
 
     elif mode == 'predict':
         pass
@@ -465,15 +491,17 @@ def main(_argv):
     batch_zie = FLAGS.batch_size
     epochs = FLAGS.epochs
     test_data = FLAGS.test_dataset
+    analyze_data = FLAGS.analyze_data
 
     """
     e.g: 
-    call_models.py --name_model=simple_fc --backbone=VGG19 --mode=train backbone_model= --batch_zie=4
-    --dataset_dir=directory/to/train/data/ --batch_size=16  
+    call_models.py --name_model=simple_fc --backbone=VGG19 --mode=train --batch_size=4
+    --dataset_dir=directory/to/train/data/ --batch_size=16  --epochs=5
     """
+
     print('INFORMATION:', name_model, backbone_model, mode)
     call_models(name_model, mode, data_dir=data_dir, backbone_model=backbone_model,
-                batch_size=batch_zie, epochs=epochs, test_data=test_data)
+                batch_size=batch_zie, epochs=epochs, test_data=test_data, analyze_data=analyze_data)
 
 
 if __name__ == '__main__':
