@@ -23,36 +23,75 @@ import re
 import ast
 import shutil
 import random
+from sklearn.metrics import roc_curve
+from sklearn.metrics import auc
 
 
-def calculate_auc_and_roc(predicted, real, case_name, plot=False):
-    y_results, names = load_predictions(predicted)
-    y_2test, names_test = load_labels(real)
+def convert_categorical_str_to_numerical(category_list):
+    """
+    Takes a category list of strings and converts it to integers, e.g:
+    category_list = [dog, cat, horse, dog, cow]
+    return: [0, 1, 2, 0, 3]
 
+    :param category_list: (list) list of string categories
+    :return: (list)
+    """
+
+    unique = list(np.unique(category_list))
+    return [unique.index(u) for u in category_list]
+
+
+def match_pair_of_data(data_file_1, data_file_2):
+    """
+    matches pairs of data from two csv files
+    :param data_file_1: (str) CSV file absolute path
+    :param data_file_2: (str) CSV file absolute path
+    :return: (list, list) list of numerical values for a list of inputs that matches name
+    """
     y_test = []
     y_pred = []
 
-    print(len(y_results), len(names))
-    print(len(y_2test), len(names_test))
+    data_file1 = pd.read_csv(data_file_1)
+    data_file2 = pd.read_csv(data_file_2)
 
-    for i, name in enumerate(names):
-        for j, other_name in enumerate(names_test):
-            if name == other_name:
-                y_pred.append(float(y_results[i]))
-                y_test.append(int(y_2test[j]))
+    gt_categories = convert_categorical_str_to_numerical(data_file2['tissue type'].tolist())
+    gt_file_names = data_file2['image_name'].tolist()
+    predict_fnames = data_file1['fname'].tolist()
+    predict_categories = data_file1['class_1'].tolist()
 
+    print(f'found {len(gt_file_names)} cases in file 1 and {len(predict_fnames)} cases in file 2')
+
+    for i, name in enumerate(predict_fnames):
+        if name in gt_file_names:
+            y_pred.append(float(predict_categories[i]))
+            y_test.append(float(gt_categories[gt_file_names.index(name)]))
+
+    print(f'{len(y_test)} cases matched names')
+    return y_test, y_pred
+
+
+def calculate_auc_and_roc(predicted, real, case_name, plot=True, results_directory='',
+                          results_id='', save_plot=False):
+
+    y_test, y_pred = match_pair_of_data(predicted, real)
     fpr_keras, tpr_keras, thresholds_keras = roc_curve(y_test, y_pred)
-
     auc_keras = auc(fpr_keras, tpr_keras)
+
+    plt.figure()
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.plot(fpr_keras, tpr_keras, label=case_name + '(area = {:.3f})'.format(auc_keras))
+    # plt.plot(fpr_rf, tpr_rf, label='RF (area = {:.3f})'.format(auc_rf))
+    plt.xlabel('False positive rate')
+    plt.ylabel('True positive rate')
+    plt.title('ROC curve')
+    plt.legend(loc='best')
+    if save_plot is True:
+        name_fig = ''.join([results_id, 'auc_.png'])
+        plt.savefig(results_directory + name_fig)
     if plot is True:
-        plt.figure()
-        plt.plot([0, 1], [0, 1], 'k--')
-        plt.plot(fpr_keras, tpr_keras, label=case_name + '(area = {:.3f})'.format(auc_keras))
-        # plt.plot(fpr_rf, tpr_rf, label='RF (area = {:.3f})'.format(auc_rf))
-        plt.xlabel('False positive rate')
-        plt.ylabel('True positive rate')
-        plt.title('ROC curve')
-        plt.legend(loc='best')
+        plt.show()
+
+    plt.close()
 
     return auc_keras
 
@@ -68,6 +107,7 @@ def check_file_isvid(filename):
         return True
     else:
         return False
+
 
 def get_video_files_in_dir(dir_dataset):
     """
@@ -139,8 +179,6 @@ def determine_type_procedure(file_name):
     for kind in types_procedures:
         if kind in file_name:
             return kind
-
-
 
 
 def analyze_dataset_patterns(dataset_dir, pattern_str):
@@ -288,7 +326,6 @@ def compare_box_plots(general_directory = '', name_test_csv_file='', name_valida
     textfile = open(text_file_name, "w")
     np.savetxt(textfile, csv_files, delimiter="\n", fmt="%s")
     textfile.close()
-
 
 
 def get_confusion_matrix_intersection_mats(groundtruth, predicted):
@@ -599,16 +636,14 @@ def save_boxplots(project_dir):
     """
 
     if type(project_dir) == str:
-        print(project_dir)
-        #olders_prediction = os.listdir(os.path.join(project_dir, 'results', experiment_id, 'predictions'))
         compare_box_plots(project_dir)
-
+        #olders_prediction = os.listdir(os.path.join(project_dir, 'results', experiment_id, 'predictions'))
 
     elif type(project_dir) == list:
         results_list = os.listdir(project_dir + 'results/')
         results_list.remove('temp')
         for experiment_id in results_list:
-            print(experiment_id)
+
             folders_prediction = os.listdir(os.path.join(project_dir, 'results', experiment_id, 'predictions'))
 
             for folder in folders_prediction:
