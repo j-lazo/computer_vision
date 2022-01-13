@@ -2,3 +2,4 @@
 .DS_Store
 analyze_data.py
 run_experiment.py
+__pycache__
