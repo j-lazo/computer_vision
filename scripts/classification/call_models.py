@@ -27,8 +27,6 @@ import data_management as dam
 import data_analysis as daa
 import classification_models as cms
 
-
-
 flags.DEFINE_string('name_model', '', 'name of the model')
 flags.DEFINE_string('mode', '', 'train or predict')
 flags.DEFINE_string('backbone', '', 'backbone network')
@@ -40,7 +38,7 @@ flags.DEFINE_integer('epochs', 1, 'number of epochs')
 flags.DEFINE_integer('batch_size', 4, 'batch size')
 flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
-flags.DEFINE_string('analyze_data', False,  'select if analyze data or not')
+flags.DEFINE_bool('analyze_data', False,  'select if analyze data or not')
 
 """
 flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
@@ -146,6 +144,7 @@ def generate_experiment_ID(name_model, learning_rate, batch_size, backbone_model
                               training_starting_time.strftime("%d_%m_%Y_%H_%M")
                               ])
     return id_name
+
 
 def load_pretrained_model(name_model, weights='imagenet'):
 
@@ -356,9 +355,9 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     print(evaluation)
 
     predictions = model.predict(data_gen, verbose=True, steps=1)
-    print(np.shape(predictions))
 
     # 2DO: modify this to handle N classes
+    # print(np.shape(predictions))
     x_0 = [x[0] for x in predictions]
     x_1 = [x[1] for x in predictions]
     #names = [os.path.basename(x) for x in data_gen.filenames]
@@ -366,20 +365,27 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     predicts = np.argmax(predictions, axis=1)
     label_index = {v: k for k, v in data_gen.class_indices.items()}
     predicts = [label_index[p] for p in predicts]
-    print(predicts)
     df = pd.DataFrame(columns=['fname', 'class_1', 'class_2', 'over all'])
     df['fname'] = [os.path.basename(x) for x in data_gen.filenames]
     df['class_1'] = x_0
     df['class_2'] = x_1
     df['over all'] = predicts
     # save the predictions  of each case
-    name_csv_file = ''.join([results_directory, '/predictions_', output_name, '_', results_id, '_.csv'])
-    df.to_csv(name_csv_file, index=False)
+    results_csv_file = ''.join([results_directory, 'predictions_', output_name, '_', results_id, '_.csv'])
+    df.to_csv(results_csv_file, index=False)
 
     if analyze_data is True:
-        auc_val = daa.calculate_auc_and_roc(predictions, real_values, output_name, plot=False)
+        list_files = [f for f in os.listdir(directory_to_evaluate) if f.endswith('.csv')]
+        if list_files:
+            annotations_csv_data = list_files.pop()
+            dir_annotations_csv = directory_to_evaluate + annotations_csv_data
+            auc = daa.calculate_auc_and_roc(results_csv_file, dir_annotations_csv, output_name, plot=False,
+                                            results_directory=results_directory, results_id=results_id, save_plot=True)
+            print(f'AUC: {auc}')
+        else:
+            print(f'No annotation file found in {directory_to_evaluate}')
 
-    return name_csv_file
+    return results_csv_file
 
 
 def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_data_dir='',
@@ -443,12 +449,12 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
         if eval_val_set is True:
             evaluate_and_predict(model, validation_data_dir, results_directory,
                                  results_id=new_results_id, output_name='val',
-                                 backbone_model=backbone_model, predict=False)
+                                 backbone_model=backbone_model)
 
         if eval_train_set is True:
             evaluate_and_predict(model, train_data_dir, results_directory,
                                  results_id=new_results_id, output_name='train',
-                                 backbone_model=backbone_model, predict=False)
+                                 backbone_model=backbone_model)
         if test_data != '':
             # determine if there are sub_folders or if it's the absolute path of the dataset
             sub_dirs = [f for f in os.listdir(test_data) if os.path.isdir(test_data + f)]
@@ -459,23 +465,21 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                         # this means that inside each sub-dir there is more directories so we can iterate over the previous one
                         name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
                                              results_id=new_results_id, output_name=sub_dir,
-                                             backbone_model=backbone_model, predict=True,
-                                             analyze_data=analyze_data)
+                                             backbone_model=backbone_model, analyze_data=analyze_data)
 
                         print(f'Evaluation results saved at {name_file}')
                     else:
                         name_file = evaluate_and_predict(model, test_data, results_directory,
                                                          results_id=new_results_id, output_name='test',
-                                                         backbone_model=backbone_model, predict=True,
-                                                         analyze_data=analyze_data)
+                                                         backbone_model=backbone_model, analyze_data=analyze_data)
                         print(f'Evaluation results saved at {name_file}')
+                        break
 
             else:
                 name_file = evaluate_and_predict(model, test_data, results_directory,
                                      results_id=new_results_id, output_name='test',
-                                     backbone_model=backbone_model, predict=True, analyze_data=analyze_data)
+                                     backbone_model=backbone_model, analyze_data=analyze_data)
                 print(f'Evaluation results saved at {name_file}')
-
 
     elif mode == 'predict':
         pass
