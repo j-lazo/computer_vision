@@ -20,7 +20,7 @@ from keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
 
 from sklearn.metrics import roc_curve, auc
-
+from tensorflow import keras
 sys.path.append(os.getcwd() + '/scripts/general_functions/')
 
 import data_management as dam
@@ -37,11 +37,11 @@ flags.DEFINE_string('results_dir', os.getcwd() + 'results/', 'path to dataset')
 flags.DEFINE_integer('epochs', 1, 'number of epochs')
 flags.DEFINE_integer('batch_size', 4, 'batch size')
 flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
-flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
+flags.DEFINE_string('weights', '', 'path to weights file')
 flags.DEFINE_bool('analyze_data', False,  'select if analyze data or not')
+flags.DEFINE_string('directory_model', '', 'indicate the path to the directory')
 
 """
-flags.DEFINE_string('weights', './checkpoints/yolov3.tf', 'path to weights file')
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
                   'fit: model.fit, '
                   'eager_fit: model.fit(run_eagerly=True), '
@@ -54,15 +54,7 @@ flags.DEFINE_enum('transfer', 'none',
                   'frozen: Transfer and freeze all, '
                   'fine_tune: Transfer all and freeze darknet only')
 flags.DEFINE_integer('size', '', 'image size')
-flags.DEFINE_integer('epochs', 2, 'number of epochs')
-flags.DEFINE_integer('batch_size', 8, 'batch size')
-flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
-flags.DEFINE_integer('num_classes', 80, 'number of classes in the model')
-flags.DEFINE_integer('weights_num_classes', None, 'specify num class for `weights` file if different, '
-                     'useful in transfer learning with different number of classes')
-flags.DEFINE_boolean('multi_gpu', False, 'Use if wishing to train with more than 1 GPU.')
 """
-
 
 class DataGenerator(tf.keras.utils.Sequence):
     # Generates data for Keras
@@ -121,6 +113,38 @@ class DataGenerator(tf.keras.utils.Sequence):
             y[i] = self.labels[i]
 
         return x, tf.keras.utils.to_categorical(y, num_classes=self.n_classes)
+
+
+def make_predictions(model, innput_frame, output_size=(300, 300)):
+    # get the input size of the network
+    input_layer_shape = model.layers[0].input_shape
+    shape_input = np.shape(input_layer_shape)
+    if shape_input[-1] == 4:
+        input_size_x = input_layer_shape[0][1]
+        input_size_y = input_layer_shape[0][2]
+
+    # reshape the input frame to be compatible with the input of the network
+    reshaped_img = cv2.resize(innput_frame, (input_size_x, input_size_y),
+                              interpolation=cv2.INTER_AREA)
+    # apply blur to the image and normalize the image
+    resized = (cv2.blur(reshaped_img, (7, 7)))/255
+    # make a prediction of the mask
+    mask = cvf.predict_mask(model, resized)
+    # resize the image for a size to show to the user
+    output_imgage = cv2.resize(reshaped_img, output_size, interpolation=cv2.INTER_AREA)
+    w, h, d = np.shape(output_imgage)
+    # calculate the center points of the lumen according to the detected mask
+    point_x, point_y = cvf.detect_dark_region(mask, output_imgage)
+
+    #if not(np.isnan(point_x)):
+    #    cv2.circle(output_imgage, (int(point_x), int(point_y)), 45, (0, 0, 255), 2)
+    #if not(np.isnan(point_y)):
+    #    cv2.circle(output_imgage, (int(point_x), int(point_y)), 25, (0, 0, 255), 2)
+    #    cv2.line(output_imgage, (int(point_x), int(point_y)), (int(w / 2), int(h / 2)), (255, 0, 0), 4)
+    # center of the image
+    #cv2.rectangle(output_imgage, (int(w / 2) - 3, int(h / 2) - 3), (int(w / 2) + 3, int(h / 2) + 3),  (0, 255, 255), -1)
+
+    return output_imgage, point_x, point_y
 
 
 def generate_experiment_ID(name_model, learning_rate, batch_size, backbone_model=''):
@@ -199,13 +223,18 @@ def load_pretrained_model(name_model, weights='imagenet'):
 
 
 def load_cap_models(name_model, num_classes):
+
     if name_model == 'simple_fc':
-        cap_model = cms.simple_FC(num_classes)
+        cap_model = cms.simple_fc(num_classes)
+    elif name_model =='fc_3layers':
+        cap_model = cms.fc_3layers(num_classes)
+    else:
+        print(f'mode {name_model} not found')
 
     return cap_model
 
 
-def load_model(name_model, backbone_model='', num_classes=1):
+def build_model(name_model, backbone_model='', num_classes=1):
     # initialize model
     model = Sequential()
     # load the backbone
@@ -218,6 +247,27 @@ def load_model(name_model, backbone_model='', num_classes=1):
 
     return model
 
+
+def load_model(directory_model):
+
+    if directory_model.endswith('.h5'):
+        model_path = directory_model
+    else:
+        files_dir = [f for f in os.listdir(directory_model) if f.endswith('.h5')]
+        if files_dir:
+            model_path = files_dir.pop()
+        else:
+            print(f'No model found in {directory_model}')
+
+    print('MODEL USED:')
+    print(model_path)
+    #model = tf.keras.models.load_model(model_path, compile=False)
+    print(f'Model path: {directory_model + model_path}')
+    model = keras.models.load_model(directory_model + model_path)
+    model.summary()
+    input_size = (len(model.layers[0].output_shape[:]))
+
+    return model, input_size
 
 def generate_dict_x_y(general_dict):
 
@@ -323,8 +373,9 @@ def load_data(data_dir, annotations_file='', backbone_model='',
 
 def train_model(model, training_generator, validation_generator, epochs,
                 batch_size, results_directory, new_results_id, shuffle=1, verbose=1):
+    temp_name_model = results_directory + new_results_id + "_model.h5"
     callbacks = [
-        ModelCheckpoint(results_directory + new_results_id + "_model.h5",
+        ModelCheckpoint(temp_name_model,
                         monitor="val_loss", save_best_only=True),
         ReduceLROnPlateau(monitor='val_loss', patience=25),
         CSVLogger(results_directory + 'train_history_' + new_results_id + "_.csv"),
@@ -390,21 +441,21 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 
 def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_data_dir='',
                 test_data='', results_dir=os.getcwd() + '/results/', epochs=2, batch_size=4, learning_rate=0.001,
-                backbone_model='', eval_val_set=False, eval_train_set=False, analyze_data=False):
-
-    # Determine what is the structure of the data directory, if the directory contains train/val datasets
-    if validation_data_dir == '':
-        sub_dirs = os.listdir(data_dir)
-        if 'train' in sub_dirs:
-            train_data_dir = data_dir + 'train/'
-
-        if 'val' in sub_dirs:
-            validation_data_dir = data_dir + 'val/'
-        else:
-            print(f'not recognized substructure found in {data_dir}, please indicate the validation dataset')
+                backbone_model='', eval_val_set=False, eval_train_set=False, analyze_data=False, directory_model=''):
 
     # Decide how to act according to the mode (train/predict)
     if mode == 'train':
+
+        # Determine what is the structure of the data directory, if the directory contains train/val datasets
+        if validation_data_dir == '':
+            sub_dirs = os.listdir(data_dir)
+            if 'train' in sub_dirs:
+                train_data_dir = data_dir + 'train/'
+
+            if 'val' in sub_dirs:
+                validation_data_dir = data_dir + 'val/'
+            else:
+                print(f'not recognized substructure found in {data_dir}, please indicate the validation dataset')
 
         # Define Generators
         training_generator, num_classes = load_data(train_data_dir, backbone_model=backbone_model,
@@ -413,7 +464,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                                                       batch_size=batch_size)
 
         # load the model
-        model = load_model(name_model, backbone_model, num_classes)
+        model = build_model(name_model, backbone_model, num_classes)
         adam = Adam(learning_rate=learning_rate)
         sgd = SGD(learning_rate=learning_rate, momentum=0.9)
         metrics = ["accuracy",  tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
@@ -482,7 +533,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                 print(f'Evaluation results saved at {name_file}')
 
     elif mode == 'predict':
-        pass
+        model = load_model(directory_model)
 
 
 def main(_argv):
@@ -496,6 +547,14 @@ def main(_argv):
     epochs = FLAGS.epochs
     test_data = FLAGS.test_dataset
     analyze_data = FLAGS.analyze_data
+    directory_model = FLAGS.directory_model
+
+    if mode == 'predict':
+        if directory_model == '':
+            raise ValueError('No directory of the model indicated')
+        else:
+            if test_data == '':
+                raise ValueError('No test dataset, image or video indicated')
 
     """
     e.g: 
@@ -505,7 +564,8 @@ def main(_argv):
 
     print('INFORMATION:', name_model, backbone_model, mode)
     call_models(name_model, mode, data_dir=data_dir, backbone_model=backbone_model,
-                batch_size=batch_zie, epochs=epochs, test_data=test_data, analyze_data=analyze_data)
+                batch_size=batch_zie, epochs=epochs, test_data=test_data,
+                analyze_data=analyze_data, directory_model=directory_model)
 
 
 if __name__ == '__main__':

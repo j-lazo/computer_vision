@@ -3,10 +3,10 @@ from tensorflow.keras import Sequential
 from tensorflow.keras import layers
 from tensorflow.keras import regularizers
 from keras.layers import Convolution2D, Dense, Input, Flatten, Dropout, MaxPooling2D, BatchNormalization, \
-    GlobalAveragePooling2D, Concatenate, AveragePooling2D
+    GlobalAveragePooling2D, Concatenate, AveragePooling2D, Conv2D
 
 
-def simple_FC(num_classes):
+def simple_fc(num_classes):
     """
     Simple Fully Connected Cap layer
     :param num_classes:
@@ -19,32 +19,39 @@ def simple_FC(num_classes):
     return model
 
 
-def simple_3fc_(num_classes):
+def fc_3layers(num_classes):
 
-    #nclass = len(train_gen.class_indices)
     model = Sequential()
     model.add(GlobalAveragePooling2D())
-    model.add(Dense(2048, activation='relu'))
+    model.add(Dense(1024, activation='relu'))
     model.add(Dropout(0.5))
     model.add(Dense(2048, activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(2048, activation='relu', kernel_regularizer=regularizers.l2(0.001)))
+    model.add(Dense(2048, activation='relu'))
     model.add(Flatten())
     model.add(Dense(num_classes, activation='softmax'))
 
     return model
 
 
-def simple_sequential_3Conv(num_classes):
-
+def Conv_1layer(num_classes):
     model = Sequential()
-    model.add(AveragePooling2D())
-    model.add(Dense(2048, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(2048, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(2048, activation='relu', kernel_regularizer=regularizers.l2(0.001)))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Conv2D(filters=512, kernel_size=(3, 3), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Flatten())
+    model.add(Dense(256, activation='relu'))
+    model.add(Dense(num_classes, activation='softmax'))
+
+    return model
+
+
+def Conv_3layers(num_classes):
+    model = Sequential()
+    model.add(Conv2D(filters=512, kernel_size=(3, 3), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Flatten())
+    model.add(Dense(256, activation='relu'))
     model.add(Dense(num_classes, activation='softmax'))
 
 
