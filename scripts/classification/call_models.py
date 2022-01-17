@@ -40,6 +40,7 @@ flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
 flags.DEFINE_string('weights', '', 'path to weights file')
 flags.DEFINE_bool('analyze_data', False,  'select if analyze data or not')
 flags.DEFINE_string('directory_model', '', 'indicate the path to the directory')
+flags.DEFINE_float('validation_split', 0.2, 'iif not validation dir but needed')
 
 """
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
@@ -219,6 +220,8 @@ def load_pretrained_model(name_model, weights='imagenet'):
         base_model.trainable = False
         input_size = (299, 299, 3)
 
+    print('PRETRAINED Model')
+    base_model.summary()
     return base_model, input_size
 
 
@@ -249,7 +252,6 @@ def build_model(name_model, backbone_model='', num_classes=1):
 
 
 def load_model(directory_model):
-
     if directory_model.endswith('.h5'):
         model_path = directory_model
     else:
@@ -268,6 +270,7 @@ def load_model(directory_model):
     input_size = (len(model.layers[0].output_shape[:]))
 
     return model, input_size
+
 
 def generate_dict_x_y(general_dict):
 
@@ -402,7 +405,7 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
                                   batch_size=batch_size, prediction_mode=True)
 
     evaluation = model.evaluate(data_gen, verbose=True, steps=1)
-    print('Performance:')
+    print('Evaluation results:')
     print(evaluation)
 
     predictions = model.predict(data_gen, verbose=True, steps=1)
@@ -446,7 +449,8 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
     # Decide how to act according to the mode (train/predict)
     if mode == 'train':
 
-        # Determine what is the structure of the data directory, if the directory contains train/val datasets
+        # Determine what is the structure of the data directory,
+        # if the directory contains train/val datasets
         if validation_data_dir == '':
             sub_dirs = os.listdir(data_dir)
             if 'train' in sub_dirs:
@@ -456,6 +460,8 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                 validation_data_dir = data_dir + 'val/'
             else:
                 print(f'not recognized substructure found in {data_dir}, please indicate the validation dataset')
+        else:
+            train_data_dir = data_dir
 
         # Define Generators
         training_generator, num_classes = load_data(train_data_dir, backbone_model=backbone_model,
@@ -494,7 +500,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
         model.save(results_directory + new_results_id + '_model')
 
         print('Total Training TIME:', (datetime.datetime.now() - start_time))
-        print('METRICS Considered:')
+        print('History Model Keys:')
         print(trained_model.history.keys())
         # in case evaluate val dataset is True
         if eval_val_set is True:
@@ -524,6 +530,12 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                                                          results_id=new_results_id, output_name='test',
                                                          backbone_model=backbone_model, analyze_data=analyze_data)
                         print(f'Evaluation results saved at {name_file}')
+                        new_model = load_model(results_directory)
+
+                        name_file = evaluate_and_predict(new_model, ''.join([test_data, sub_dir, '/']), results_directory,
+                                                         results_id=new_results_id, output_name=sub_dir,
+                                                         backbone_model=backbone_model, analyze_data=analyze_data)
+
                         break
 
             else:
@@ -531,6 +543,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                                      results_id=new_results_id, output_name='test',
                                      backbone_model=backbone_model, analyze_data=analyze_data)
                 print(f'Evaluation results saved at {name_file}')
+
 
     elif mode == 'predict':
         model = load_model(directory_model)
@@ -541,11 +554,11 @@ def main(_argv):
     name_model = FLAGS.name_model
     mode = FLAGS.mode
     backbone_model = FLAGS.backbone
-    data_dir = FLAGS.dataset_dir
-    val_data = FLAGS.val_dataset
+    data_dir = os.path.join(FLAGS.dataset_dir, '')
+    val_data = os.path.join(FLAGS.val_dataset, '')
     batch_zie = FLAGS.batch_size
     epochs = FLAGS.epochs
-    test_data = FLAGS.test_dataset
+    test_data = os.path.join(FLAGS.test_dataset, '')
     analyze_data = FLAGS.analyze_data
     directory_model = FLAGS.directory_model
 
