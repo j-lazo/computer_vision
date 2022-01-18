@@ -48,6 +48,7 @@ def load_video(path, max_frames=0, resize=(255, 255)):
         cap.release()
     return np.array(frames)
 
+
 def clipped_zoom(img, zoom_factor, **kwargs):
     """
     :param img:
@@ -340,8 +341,89 @@ def convert_image_format(dir_images, input_format, target_format, output_directo
         cv2.imwrite(''.join([output_directory, '/', img]).replace(input_format, target_format), img)
 
 
+def generate_training_and_validation_classification_sets(input_directory, output_directory,
+                                          training_percentage=0.5, test_dataset='False',
+                                          input_sub_dirs=[], pairs_of_data=[], convert_data=[]):
 
-def generate_training_and_validation_sets(input_directory, output_directory,
+    def _check_folder_exists(directory_path, sub_folders):
+        if not os.path.isdir(directory_path):
+            os.mkdir(directory_path)
+            for folder in sub_folders:
+                os.mkdir(''.join([directory_path, '/', folder]))
+
+    exists, sub_dirs = determine_if_subfolders_exists(input_directory)
+    if exists:
+        unique_cases = []
+        for sub_dir in sub_dirs:
+            unique_cases.append(f for f in os.listdir(input_directory + sub_dir) if os.path.isdir(input_directory + sub_dir))
+
+        unique_cases = np.unique(unique_cases)
+
+    training_dir = output_directory + 'train/'
+    validation_dir = output_directory + 'val/'
+
+    print(f'Sub-clases found:{unique_cases}')
+    _check_folder_exists(training_dir, unique_cases)
+    _check_folder_exists(validation_dir, unique_cases)
+
+    list_destination_folders = [training_dir, validation_dir]
+
+    if test_dataset is True:
+        test_dir = output_directory + 'test/'
+        _check_folder_exists(test_dir, unique_cases)
+        list_destination_folders.append(test_dir)
+
+    #2DO finish the dataset generation function
+    def _copy_imgs(input_directory, list_destination_folders, training_percentage):
+        files_path_images = "".join([input_directory, 'images/'])
+        files_path_masks = "".join([input_directory, 'masks/'])
+        original_images = sorted(os.listdir(files_path_images))
+        label_images = sorted(os.listdir(files_path_masks))
+
+        original_images = [image[:-4] for image in original_images]
+        label_images = [image[:-4] for image in label_images]
+
+        for i, image_name in enumerate(tqdm.tqdm(original_images, desc='Reading images and masks')):
+
+            destination_dir = random.choices(list_destination_folders, weights=training_percentage)[0]
+            if image_name in label_images:
+
+                if not convert_data:
+                    if pairs_of_data:
+                        name_img = ''.join([image_name, pairs_of_data[0]])
+                        name_mask = ''.join([image_name, pairs_of_data[1]])
+                    else:
+                        name_img = ''.join([image_name, '.png'])
+                        name_mask = ''.join([image_name, '.png'])
+
+                    shutil.copy(''.join([files_path_images, name_img]), ''.join([destination_dir, 'images/', name_img]))
+                    shutil.copy(''.join([files_path_masks, name_mask]), ''.join([destination_dir, 'masks/', name_mask]))
+
+                else:
+                    input_format = convert_data[0]
+                    target_format = convert_data[1]
+
+                    img = cv2.imread(''.join([files_path_images, image_name, input_format]))
+                    cv2.imwrite(''.join([destination_dir, 'images/', image_name, target_format]), img)
+
+                    mask = cv2.imread(''.join([files_path_masks, image_name, input_format]))
+                    cv2.imwrite(''.join([destination_dir, 'masks/', image_name, target_format]), mask)
+
+
+            else:
+                print(f'the pair of {image_name} does not exists')
+
+    if not input_sub_dirs:
+        _copy_imgs(input_directory, list_destination_folders, training_percentage)
+
+    else:
+        for sub_folder in input_sub_dirs:
+            print(sub_folder)
+            input_dir = ''.join([input_directory, sub_folder, '/'])
+            _copy_imgs(input_dir, list_destination_folders, training_percentage)
+
+
+def generate_training_and_validation_segmenation_sets(input_directory, output_directory,
                                           training_percentage=0.5, test_dataset='False',
                                           input_sub_dirs=[], pairs_of_data=[], convert_data=[]):
 
@@ -389,32 +471,32 @@ def generate_training_and_validation_sets(input_directory, output_directory,
         for i, image_name in enumerate(tqdm.tqdm(original_images, desc='Reading images and masks')):
 
             destination_dir = random.choices(list_destination_folders, weights=training_percentage)[0]
-            if image in label_images:
+            if image_name in label_images:
 
                 if not convert_data:
                     if pairs_of_data:
-                        name_img = ''.join([image, pairs_of_data[0]])
-                        name_mask = ''.join([image, pairs_of_data[1]])
+                        name_img = ''.join([image_name, pairs_of_data[0]])
+                        name_mask = ''.join([image_name, pairs_of_data[1]])
                     else:
-                        name_img = ''.join([image, '.png'])
-                        name_mask = ''.join([image, '.png'])
+                        name_img = ''.join([image_name, '.png'])
+                        name_mask = ''.join([image_name, '.png'])
 
                     shutil.copy(''.join([files_path_images, name_img]), ''.join([destination_dir, 'images/', name_img]))
                     shutil.copy(''.join([files_path_masks, name_mask]), ''.join([destination_dir, 'masks/', name_mask]))
 
                 else:
-                    input_format =  convert_data[0]
+                    input_format = convert_data[0]
                     target_format = convert_data[1]
 
-                    img = cv2.imread(''.join([files_path_images, image, input_format]))
-                    cv2.imwrite(''.join([destination_dir, 'images/', image, target_format]), img)
+                    img = cv2.imread(''.join([files_path_images, image_name, input_format]))
+                    cv2.imwrite(''.join([destination_dir, 'images/', image_name, target_format]), img)
 
-                    mask = cv2.imread(''.join([files_path_masks, image, input_format]))
-                    cv2.imwrite(''.join([destination_dir, 'masks/', image, target_format]), mask)
+                    mask = cv2.imread(''.join([files_path_masks, image_name, input_format]))
+                    cv2.imwrite(''.join([destination_dir, 'masks/', image_name, target_format]), mask)
 
 
             else:
-                print(f'the pair of {image} does not exists')
+                print(f'the pair of {image_name} does not exists')
 
 
     if not input_sub_dirs :
@@ -425,6 +507,7 @@ def generate_training_and_validation_sets(input_directory, output_directory,
             print(sub_folder)
             input_dir = ''.join([input_directory, sub_folder, '/'])
             _copy_imgs(input_dir, list_destination_folders, training_percentage)
+
 
 def generate_mask_from_points(img, mask_points):
     """
@@ -902,11 +985,45 @@ def rearrange_data(dir_data, destination_dir=''):
 
 
 def reshape_data_blocks(directory_data):
+
     list_data = os.listdir(directory_data)
-    #list_data.remove('.DS_store')
+    list_data.remove('.DS_store')
     for element in list_data:
         data_file = np.load(directory_data + element, allow_pickle=True)
         print(np.shape(data_file))
+
+
+def arrange_dataset(directory_path):
+
+    cases_subdirs = [f for f in os.listdir(directory_path) if os.path.isdir(directory_path + f)]
+    cases_subdirs.remove('all_cases')
+
+    for case in cases_subdirs:
+        print(case)
+        list_sub_dirs = os.listdir(directory_path + case)
+        csv_file = [f for f in list_sub_dirs if f.endswith('.csv')].pop()
+        list_sub_dirs.remove(csv_file)
+        df = pd.read_csv(directory_path + case + '/' + csv_file)
+        heads = list(df.columns)
+        file_dict = df.set_index(heads[0]).T.to_dict('list')
+        for sub_dir in list_sub_dirs:
+            list_imgs = os.listdir(os.path.join(directory_path, case, sub_dir))
+            for image in list_imgs:
+                if image in file_dict:
+                    if ' ' in image:
+                        new_image = image.replace(' ', '')
+                        print('renaming: ', image, new_image)
+                        file_dict[new_image] = file_dict.pop(image)
+                        old_img_name = ''.join([directory_path, case, '/', sub_dir, '/', image])
+                        new_img_name = ''.join([directory_path, case, '/', sub_dir, '/', new_image])
+                        os.rename(old_img_name, new_img_name)
+
+        new_df = pd.DataFrame.from_dict(file_dict, orient='index')
+        new_df.rename(columns={x: heads[i+1] for i, x in enumerate(new_df.columns)}, inplace=True)
+        new_csv_file_name = csv_file.replace('.csv', '_(1).csv')
+        df.to_csv(directory_path + case + '/' + new_csv_file_name)
+
+
 
 
 if __name__ == "__main__":
