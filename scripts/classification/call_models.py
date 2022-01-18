@@ -397,7 +397,6 @@ def train_model(model, training_generator, validation_generator, epochs,
                         monitor="val_loss", save_best_only=True),
         ReduceLROnPlateau(monitor='val_loss', patience=25),
         CSVLogger(results_directory + 'train_history_' + new_results_id + "_.csv"),
-        TensorBoard(),
         EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)]
 
     trained_model = model.fit(training_generator,
