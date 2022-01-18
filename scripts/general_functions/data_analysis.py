@@ -57,7 +57,7 @@ def match_pair_of_data(data_file_1, data_file_2):
     gt_categories = convert_categorical_str_to_numerical(data_file2['tissue type'].tolist())
     gt_file_names = data_file2['image_name'].tolist()
     predict_fnames = data_file1['fname'].tolist()
-    predict_categories = data_file1['class_1'].tolist()
+    predict_categories = data_file1['class_2'].tolist()
 
     print(f'found {len(gt_file_names)} cases in file 1 and {len(predict_fnames)} cases in file 2')
 
