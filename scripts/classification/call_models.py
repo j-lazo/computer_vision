@@ -8,6 +8,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import datetime
 import shutil
+import glob
 
 from absl import app, flags, logging
 from absl.flags import FLAGS
@@ -41,6 +42,7 @@ flags.DEFINE_string('weights', '', 'path to weights file')
 flags.DEFINE_bool('analyze_data', False,  'select if analyze data or not')
 flags.DEFINE_string('directory_model', '', 'indicate the path to the directory')
 flags.DEFINE_float('validation_split', 0.2, 'iif not validation dir but needed')
+flags.DEFINE_string('file_to_predic', '', 'Directory or file where to perform predictions if predict mode selected')
 
 """
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
@@ -148,7 +150,8 @@ def make_predictions(model, innput_frame, output_size=(300, 300)):
     return output_imgage, point_x, point_y
 
 
-def generate_experiment_ID(name_model, learning_rate, batch_size, backbone_model=''):
+def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', backbone_model='',
+                           prediction_model=''):
     """
     Generate a ID name for the experiment considering the name of the model, the learning rate,
     the batch size, and the date of the experiment
@@ -159,15 +162,20 @@ def generate_experiment_ID(name_model, learning_rate, batch_size, backbone_model
     :param backbone_model: (str)
     :return: (str) id name
     """
-    training_starting_time = datetime.datetime.now()
-    if backbone_model != '':
-        name_mod = ''.join([name_model, '+', backbone_model])
+    if prediction_model == '':
+        training_date_time = datetime.datetime.now()
+        if backbone_model != '':
+            name_mod = ''.join([name_model, '+', backbone_model])
+        else:
+            name_mod = name_model
+        id_name = ''.join([name_mod, '_lr_', str(learning_rate),
+                                  '_bs_', str(batch_size), '_',
+                                  training_date_time.strftime("%d_%m_%Y_%H_%M")
+                                  ])
     else:
-        name_mod = name_model
-    id_name = ''.join([name_mod, '_lr_', str(learning_rate),
-                              '_bs_', str(batch_size), '_',
-                              training_starting_time.strftime("%d_%m_%Y_%H_%M")
-                              ])
+        predictions_date_time = datetime.datetime.now()
+        id_name = ''.join([prediction_model, '_predictions_', predictions_date_time.strftime("%d_%m_%Y_%H_%M")])
+
     return id_name
 
 
@@ -180,42 +188,42 @@ def load_pretrained_model(name_model, weights='imagenet'):
     :return: sequential model with the selected weights
     """
 
-    if name_model == 'VGG16':
+    if name_model == 'vgg16':
         base_model = applications.vgg16.VGG16(include_top=False, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
-    elif name_model == 'VGG19':
+    elif name_model == 'vgg19':
         base_model = applications.vgg19.VGG19(include_top=False, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
-    elif name_model == 'InceptionV3':
+    elif name_model == 'inception_v3':
         base_model = applications.inception_v3.InceptionV3(include_top=False, weights=weights)
         base_model.trainable = False
         input_size = (299, 299, 3)
 
-    elif name_model == 'ResNet50':
+    elif name_model == 'resnet50':
         base_model = applications.resnet50.ResNet50(include_top=False, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
-    elif name_model == 'ResNet101':
+    elif name_model == 'resnet101':
         base_model = applications.resnet.ResNet101(include_top=False, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
-    elif name_model == 'MobileNet':
+    elif name_model == 'mobilenet':
         base_model = applications.mobilenet.MobileNet(include_top=False, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
-    elif name_model == 'DenseNet121':
+    elif name_model == 'densenet':
         base_model = applications.densenet.DenseNet121(include_top=False, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
-    elif name_model == 'Xception':
+    elif name_model == 'xception':
         base_model = applications.xception.Xception(include_top=False, weights=weights)
         base_model.trainable = False
         input_size = (299, 299, 3)
@@ -259,7 +267,12 @@ def load_model(directory_model):
         if files_dir:
             model_path = files_dir.pop()
         else:
-            print(f'No model found in {directory_model}')
+            files_dir = [f for f in os.listdir(directory_model) if f.endswith('.pb')]
+            if files_dir:
+                model_path = ''
+                print(f'Tensorflow model found at {directory_model}')
+            else:
+                print(f'No model found in {directory_model}')
 
     print('MODEL USED:')
     print(model_path)
@@ -290,35 +303,35 @@ def load_data(data_dir, annotations_file='', backbone_model='',
               img_size=(255, 255), batch_size=8, prediction_mode=False):
     # If using a pre-trained backbone model, then use the img data generator from the pretrained model
     if backbone_model != '':
-        if backbone_model == 'VGG16':
+        if backbone_model == 'vgg16':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.vgg16.preprocess_input)
             img_width, img_height = 224, 224
 
-        elif backbone_model == 'VGG19':
+        elif backbone_model == 'vgg19':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.vgg19.preprocess_input)
             img_width, img_height = 224, 224
 
-        elif backbone_model == 'InceptionV3':
+        elif backbone_model == 'inception_v3':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.inception_v3.preprocess_input)
             img_width, img_height = 299, 299
 
-        elif backbone_model == 'ResNet50':
+        elif backbone_model == 'resnet50':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.resnet50.preprocess_input)
             img_width, img_height = 224, 224
 
-        elif backbone_model == 'ResNet101':
+        elif backbone_model == 'resnet101':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.resnet.preprocess_input)
             img_width, img_height = 224, 224
 
-        elif backbone_model == 'MobileNet':
+        elif backbone_model == 'mobilenet':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.mobilenet.preprocess_input)
             img_width, img_height = 224, 224
 
-        elif backbone_model == 'DenseNet121':
+        elif backbone_model == 'densenet':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.densenet.preprocess_input)
             img_width, img_height = 224, 224
 
-        elif backbone_model == 'Xception':
+        elif backbone_model == 'xception':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.xception.preprocess_input)
             img_width, img_height = 299, 299
 
@@ -327,6 +340,7 @@ def load_data(data_dir, annotations_file='', backbone_model='',
 
     if annotations_file == '':
         # determine if the structure of the directory is divided by classes or there is an annotation file
+        print(data_dir)
         files_dir = [f for f in os.listdir(data_dir) if os.path.isdir(data_dir+f)]
         num_classes = len(files_dir)
         # if the number of sub-folders is less than two then it supposes that
@@ -349,7 +363,8 @@ def load_data(data_dir, annotations_file='', backbone_model='',
                     data_generator = data_idg.flow_from_directory(data_dir,
                                                                   batch_size=total_all_imgs,
                                                                   class_mode='categorical',
-                                                                  target_size=(img_width, img_height))
+                                                                  target_size=(img_width, img_height),
+                                                                  shuffle=False)
 
             else:
                 data_generator = data_idg.flow_from_directory(data_dir,
@@ -400,21 +415,20 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
                          output_name='', results_id='', backbone_model='', batch_size=1,
                          analyze_data=False, output_dir=''):
     print(f'Evaluation of {directory_to_evaluate}')
-    # load the data to evaluate and predict
-    data_gen, ene = load_data(directory_to_evaluate, backbone_model=backbone_model,
-                                  batch_size=batch_size, prediction_mode=True)
 
-    evaluation = model.evaluate(data_gen, verbose=True, steps=1)
+    # load the data to evaluate and predict
+    data_gen, _ = load_data(directory_to_evaluate, backbone_model=backbone_model,
+                                  batch_size=1, prediction_mode=True)
+
+    evaluation = model.evaluate(data_gen, verbose=True)
     print('Evaluation results:')
     print(evaluation)
-
     predictions = model.predict(data_gen, verbose=True, steps=1)
 
     # 2DO: modify this to handle N classes
     # print(np.shape(predictions))
     x_0 = [x[0] for x in predictions]
     x_1 = [x[1] for x in predictions]
-    #names = [os.path.basename(x) for x in data_gen.filenames]
 
     predicts = np.argmax(predictions, axis=1)
     label_index = {v: k for k, v in data_gen.class_indices.items()}
@@ -444,7 +458,8 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 
 def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_data_dir='',
                 test_data='', results_dir=os.getcwd() + '/results/', epochs=2, batch_size=4, learning_rate=0.001,
-                backbone_model='', eval_val_set=False, eval_train_set=False, analyze_data=False, directory_model=''):
+                backbone_model='', eval_val_set=False, eval_train_set=False, analyze_data=False, directory_model='',
+                file_to_predic=''):
 
     # Decide how to act according to the mode (train/predict)
     if mode == 'train':
@@ -483,8 +498,8 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
             os.mkdir(results_dir)
 
         # ID name for the folder and results
-        new_results_id = generate_experiment_ID(name_model,learning_rate, batch_size,
-                                                backbone_model=backbone_model)
+        new_results_id = generate_experiment_ID(name_model=name_model, learning_rate=learning_rate,
+                                                batch_size=batch_size, backbone_model=backbone_model)
 
         results_directory = ''.join([results_dir, new_results_id, '/'])
         # if results experiment doesn't exists create it
@@ -497,7 +512,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
         trained_model = train_model(model, training_generator, validation_generator, epochs,
                     batch_size, results_directory, new_results_id)
 
-        model.save(results_directory + new_results_id + '_model')
+        model.save(''.join([results_directory, 'model_', new_results_id]))
 
         print('Total Training TIME:', (datetime.datetime.now() - start_time))
         print('History Model Keys:')
@@ -530,12 +545,6 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                                                          results_id=new_results_id, output_name='test',
                                                          backbone_model=backbone_model, analyze_data=analyze_data)
                         print(f'Evaluation results saved at {name_file}')
-                        new_model = load_model(results_directory)
-
-                        name_file = evaluate_and_predict(new_model, ''.join([test_data, sub_dir, '/']), results_directory,
-                                                         results_id=new_results_id, output_name=sub_dir,
-                                                         backbone_model=backbone_model, analyze_data=analyze_data)
-
                         break
 
             else:
@@ -544,9 +553,51 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                                      backbone_model=backbone_model, analyze_data=analyze_data)
                 print(f'Evaluation results saved at {name_file}')
 
-
     elif mode == 'predict':
-        model = load_model(directory_model)
+        model, _ = load_model(directory_model)
+        backbone_model = model.get_layer(index=0).name
+        print(f'Backbone identified: {backbone_model}')
+        if daa.check_file_isvid(file_to_predic):
+            pass
+        elif os.path.isdir(file_to_predic):
+            new_results_id = generate_experiment_ID(prediction_model=os.path.basename(os.path.normpath(directory_model)))
+            results_directory = directory_model
+
+            if not os.path.isdir(file_to_predic):
+                os.mkdir(file_to_predic)
+
+            # determine if there are sub_folders or if it's the absolute path of the dataset
+            sub_dirs = [f for f in os.listdir(file_to_predic) if os.path.isdir(file_to_predic + f)]
+            if sub_dirs:
+                for sub_dir in sub_dirs:
+                    sub_sub_dirs = [f for f in os.listdir(file_to_predic + sub_dir) if
+                                    os.path.isdir(file_to_predic + sub_dir + f)]
+                    if sub_sub_dirs:
+                        # this means that inside each sub-dir there is more directories so we can iterate over the previous one
+                        name_file = evaluate_and_predict(model, ''.join([file_to_predic, sub_dir, '/']), results_directory,
+                                                         results_id=new_results_id, output_name=sub_dir,
+                                                         backbone_model=backbone_model, analyze_data=analyze_data)
+
+                        print(f'Evaluation results saved at {name_file}')
+                    else:
+                        name_file = evaluate_and_predict(model, file_to_predic, results_directory,
+                                                         results_id=new_results_id, output_name='test',
+                                                         backbone_model=backbone_model, analyze_data=analyze_data)
+                        print(f'Evaluation results saved at {name_file}')
+                        break
+
+            else:
+                name_file = evaluate_and_predict(model, file_to_predic, results_directory,
+                                                 results_id=new_results_id, output_name='test',
+                                                 backbone_model=backbone_model, analyze_data=analyze_data)
+                print(f'Evaluation results saved at {name_file}')
+
+        elif file_to_predic == 'webcam':
+            pass
+
+        else:
+            print(f'Format or dir {file_to_predic} not understood')
+
 
 
 def main(_argv):
@@ -561,12 +612,13 @@ def main(_argv):
     test_data = os.path.join(FLAGS.test_dataset, '')
     analyze_data = FLAGS.analyze_data
     directory_model = FLAGS.directory_model
+    file_to_predic = FLAGS.file_to_predic
 
     if mode == 'predict':
         if directory_model == '':
             raise ValueError('No directory of the model indicated')
         else:
-            if test_data == '':
+            if file_to_predic == '':
                 raise ValueError('No test dataset, image or video indicated')
 
     """
@@ -578,7 +630,7 @@ def main(_argv):
     print('INFORMATION:', name_model, backbone_model, mode)
     call_models(name_model, mode, data_dir=data_dir, backbone_model=backbone_model,
                 batch_size=batch_zie, epochs=epochs, test_data=test_data,
-                analyze_data=analyze_data, directory_model=directory_model)
+                analyze_data=analyze_data, directory_model=directory_model, file_to_predic=file_to_predic)
 
 
 if __name__ == '__main__':
