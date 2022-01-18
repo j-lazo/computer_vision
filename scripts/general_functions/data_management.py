@@ -342,8 +342,8 @@ def convert_image_format(dir_images, input_format, target_format, output_directo
 
 
 def generate_training_and_validation_classification_sets(input_directory, output_directory,
-                                          training_percentage=0.5, test_dataset='False',
-                                          input_sub_dirs=[], pairs_of_data=[], convert_data=[]):
+                                          case_probabilities=0.5, test_dataset='False',
+                                          pairs_of_data=[], convert_data=[]):
 
     def _check_folder_exists(directory_path, sub_folders):
         if not os.path.isdir(directory_path):
@@ -351,41 +351,15 @@ def generate_training_and_validation_classification_sets(input_directory, output
             for folder in sub_folders:
                 os.mkdir(''.join([directory_path, '/', folder]))
 
-    exists, sub_dirs = determine_if_subfolders_exists(input_directory)
-    if exists:
-        unique_cases = []
-        for sub_dir in sub_dirs:
-            unique_cases.append(f for f in os.listdir(input_directory + sub_dir) if os.path.isdir(input_directory + sub_dir))
-
-        unique_cases = np.unique(unique_cases)
-
-    training_dir = output_directory + 'train/'
-    validation_dir = output_directory + 'val/'
-
-    print(f'Sub-clases found:{unique_cases}')
-    _check_folder_exists(training_dir, unique_cases)
-    _check_folder_exists(validation_dir, unique_cases)
-
-    list_destination_folders = [training_dir, validation_dir]
-
-    if test_dataset is True:
-        test_dir = output_directory + 'test/'
-        _check_folder_exists(test_dir, unique_cases)
-        list_destination_folders.append(test_dir)
-
-    #2DO finish the dataset generation function
-    def _copy_imgs(input_directory, list_destination_folders, training_percentage):
+    def _copy_imgs(input_directory, list_destination_folders, case_probabilities):
         files_path_images = "".join([input_directory, 'images/'])
-        files_path_masks = "".join([input_directory, 'masks/'])
         original_images = sorted(os.listdir(files_path_images))
-        label_images = sorted(os.listdir(files_path_masks))
-
         original_images = [image[:-4] for image in original_images]
         label_images = [image[:-4] for image in label_images]
 
         for i, image_name in enumerate(tqdm.tqdm(original_images, desc='Reading images and masks')):
 
-            destination_dir = random.choices(list_destination_folders, weights=training_percentage)[0]
+            destination_dir = random.choices(list_destination_folders, weights=case_probabilities)[0]
             if image_name in label_images:
 
                 if not convert_data:
@@ -413,14 +387,38 @@ def generate_training_and_validation_classification_sets(input_directory, output
             else:
                 print(f'the pair of {image_name} does not exists')
 
-    if not input_sub_dirs:
-        _copy_imgs(input_directory, list_destination_folders, training_percentage)
+    exists_subdir, sub_dirs = determine_if_subfolders_exists(input_directory)
+    unique_cases = []
+
+    if exists_subdir:
+        for sub_dir in sub_dirs:
+            unique_cases.append(f for f in os.listdir(input_directory + sub_dir) if os.path.isdir(input_directory + sub_dir))
 
     else:
-        for sub_folder in input_sub_dirs:
-            print(sub_folder)
-            input_dir = ''.join([input_directory, sub_folder, '/'])
+        unique_cases.append(f for f in os.listdir(input_directory) if os.path.isdir(input_directory))
+
+    unique_cases = np.unique(unique_cases)
+    print(f'Sub-clases found:{unique_cases}')
+
+    training_dir = output_directory + 'train/'
+    validation_dir = output_directory + 'val/'
+
+    _check_folder_exists(training_dir, unique_cases)
+    _check_folder_exists(validation_dir, unique_cases)
+    list_destination_folders = [training_dir, validation_dir]
+
+    if test_dataset is True:
+        test_dir = output_directory + 'test/'
+        _check_folder_exists(test_dir, unique_cases)
+        list_destination_folders.append(test_dir)
+
+    if exists_subdir:
+        for sub_dir in sub_dirs:
+            input_dir = ''.join([input_directory, sub_dir, '/'])
             _copy_imgs(input_dir, list_destination_folders, training_percentage)
+
+    else:
+        _copy_imgs(input_directory, list_destination_folders, training_percentage
 
 
 def generate_training_and_validation_segmenation_sets(input_directory, output_directory,
