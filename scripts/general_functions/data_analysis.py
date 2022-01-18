@@ -72,7 +72,17 @@ def match_pair_of_data(data_file_1, data_file_2):
 
 def calculate_auc_and_roc(predicted, real, case_name, plot=True, results_directory='',
                           results_id='', save_plot=False):
+    """
 
+    :param predicted:
+    :param real:
+    :param case_name:
+    :param plot:
+    :param results_directory:
+    :param results_id:
+    :param save_plot:
+    :return:
+    """
     y_test, y_pred = match_pair_of_data(predicted, real)
     fpr_keras, tpr_keras, thresholds_keras = roc_curve(y_test, y_pred)
     auc_keras = auc(fpr_keras, tpr_keras)
@@ -384,7 +394,17 @@ def get_confusion_matrix_overlaid_mask(image, groundtruth, predicted, alpha, col
 
 def compare_results_overlay(experiment_id = '', base_directory= '', dir_predictions='', selected_data = 'test',
                             dir_groundtruth='', dir_csv_file='', save_directory=''):
+    """
 
+    :param experiment_id:
+    :param base_directory:
+    :param dir_predictions:
+    :param selected_data:
+    :param dir_groundtruth:
+    :param dir_csv_file:
+    :param save_directory:
+    :return:
+    """
     if experiment_id != '':
         if base_directory !='':
             directory_experiment = ''.join([base_directory, 'results/', experiment_id])
@@ -664,14 +684,11 @@ def save_boxplots(project_dir):
 
 
 def extract_information_from_name(string_name):
-
+    """
+    :param string_name:
+    :return:
+    """
     model_name = re.search('evaluation_results_test_0_(.+?)_lr_', string_name).group(1)
-
-    #if 'Residual_Unet' in model_name:
-    #    model_name = 'R-Unet'
-    #elif 'Transpose_Res' in model_name:
-    #    model_name = 'TR-Unet'
-
     date_experiment = re.search('_rgb_(.+?)_.csv', string_name).group(1)
     lr = re.search('lr_(.+?)_', string_name).group(1)
     bs = re.search('bs_(.+?)_', string_name).group(1)
