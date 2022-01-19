@@ -426,7 +426,7 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 
     # determine the top-1 prediction class
     predicts = np.argmax(predictions, axis=1)
-        
+
     x_p = [[] for _ in range(len(np.unique(predicts)))]
     for x in predictions:
         for i in range(len(np.unique(predicts))):
@@ -434,7 +434,6 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 
     label_index = {v: k for k, v in data_gen.class_indices.items()}
     predicts = [label_index[p] for p in predicts]
-    print('Unique Classes:', np.unique(predicts))
     header_column = ['class_' + str(i+1) for i in range(len(np.unique(predicts)))]
     header_column.insert(0, 'fname')
     header_column.append('over all')
