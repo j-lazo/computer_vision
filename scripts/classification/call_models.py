@@ -29,7 +29,7 @@ import data_analysis as daa
 import classification_models as cms
 
 flags.DEFINE_string('name_model', '', 'name of the model')
-flags.DEFINE_string('mode', '', 'train or predict')
+flags.DEFINE_string('mode', '', 'train, predict, train_backbone')
 flags.DEFINE_string('backbone', '', 'backbone network')
 flags.DEFINE_string('dataset_dir', os.getcwd() + 'data/', 'path to dataset')
 flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
@@ -179,7 +179,7 @@ def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', b
     return id_name
 
 
-def load_pretrained_model(name_model, weights='imagenet'):
+def load_pretrained_model(name_model, weights='imagenet', include_top=False):
 
     """
     Loads a pretrained model given a name
@@ -189,42 +189,42 @@ def load_pretrained_model(name_model, weights='imagenet'):
     """
 
     if name_model == 'vgg16':
-        base_model = applications.vgg16.VGG16(include_top=False, weights=weights)
+        base_model = applications.vgg16.VGG16(include_top=include_top, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
     elif name_model == 'vgg19':
-        base_model = applications.vgg19.VGG19(include_top=False, weights=weights)
+        base_model = applications.vgg19.VGG19(include_top=include_top, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
     elif name_model == 'inception_v3':
-        base_model = applications.inception_v3.InceptionV3(include_top=False, weights=weights)
+        base_model = applications.inception_v3.InceptionV3(include_top=include_top, weights=weights)
         base_model.trainable = False
         input_size = (299, 299, 3)
 
     elif name_model == 'resnet50':
-        base_model = applications.resnet50.ResNet50(include_top=False, weights=weights)
+        base_model = applications.resnet50.ResNet50(include_top=include_top, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
     elif name_model == 'resnet101':
-        base_model = applications.resnet.ResNet101(include_top=False, weights=weights)
+        base_model = applications.resnet.ResNet101(include_top=include_top, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
     elif name_model == 'mobilenet':
-        base_model = applications.mobilenet.MobileNet(include_top=False, weights=weights)
+        base_model = applications.mobilenet.MobileNet(include_top=include_top, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
     elif name_model == 'densenet':
-        base_model = applications.densenet.DenseNet121(include_top=False, weights=weights)
+        base_model = applications.densenet.DenseNet121(include_top=include_top, weights=weights)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
     elif name_model == 'xception':
-        base_model = applications.xception.Xception(include_top=False, weights=weights)
+        base_model = applications.xception.Xception(include_top=include_top, weights=weights)
         base_model.trainable = False
         input_size = (299, 299, 3)
 
@@ -245,11 +245,11 @@ def load_cap_models(name_model, num_classes):
     return cap_model
 
 
-def build_model(name_model, backbone_model='', num_classes=1):
+def build_model(name_model, backbone_model='', num_classes=1, include_top=False):
     # initialize model
     model = Sequential()
     # load the backbone
-    base_model, input_shape_backbone = load_pretrained_model(backbone_model)
+    base_model, input_shape_backbone = load_pretrained_model(backbone_model, include_top=include_top)
     base_model.trainable = False
     # load the cap
     cap_model = load_cap_models(name_model, num_classes)
