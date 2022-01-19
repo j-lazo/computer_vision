@@ -96,7 +96,7 @@ def calculate_auc_and_roc(predicted, real, case_name, plot=True, results_directo
     plt.title('ROC curve')
     plt.legend(loc='best')
     if save_plot is True:
-        name_fig = ''.join([results_id, 'auc_.png'])
+        name_fig = ''.join(['roc_', results_id, '_.png'])
         plt.savefig(results_directory + name_fig)
     if plot is True:
         plt.show()
