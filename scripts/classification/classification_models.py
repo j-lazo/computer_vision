@@ -1,10 +1,31 @@
-import tensorflow
 from tensorflow.keras import Sequential
 from tensorflow.keras import layers
 from tensorflow.keras import regularizers
+import numpy as np
 from keras.layers import Convolution2D, Dense, Input, Flatten, Dropout, MaxPooling2D, BatchNormalization, \
     GlobalAveragePooling2D, Concatenate, AveragePooling2D, Conv2D
+from keras.preprocessing.image import ImageDataGenerator
 
+
+def feature_extractor(base_model, directory, sample_count, image_size=(224, 224), batch_size=2):
+    datagen = ImageDataGenerator(rescale=1. / 255)
+    features = np.zeros(shape=(sample_count, 7, 7, 512))  # Must be equal to the output of the convolutional base
+    labels = np.zeros(shape=(sample_count))
+    # Preprocess data
+    generator = datagen.flow_from_directory(directory,
+                                            target_size=image_size,
+                                            batch_size=batch_size,
+                                            class_mode='binary')
+    # Pass data through convolutional base
+    i = 0
+    for inputs_batch, labels_batch in generator:
+        features_batch = base_model.predict(inputs_batch)
+        features[i * batch_size: (i + 1) * batch_size] = features_batch
+        labels[i * batch_size: (i + 1) * batch_size] = labels_batch
+        i += 1
+        if i * batch_size >= sample_count:
+            break
+    return features, labels
 
 def simple_fc(num_classes):
     """
@@ -56,7 +77,6 @@ def Conv_3layers(num_classes):
 
 
 def residual_conv_3_layer(num_classes):
-
     def conv_block():
         return 0
 
