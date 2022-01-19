@@ -424,18 +424,26 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     print(evaluation)
     predictions = model.predict(data_gen, verbose=True, steps=1)
 
-    # 2DO: modify this to handle N classes
-    # print(np.shape(predictions))
-    x_0 = [x[0] for x in predictions]
-    x_1 = [x[1] for x in predictions]
-
+    # determine the top-1 prediction class
     predicts = np.argmax(predictions, axis=1)
+        
+    x_p = [[] for _ in range(len(np.unique(predicts)))]
+    for x in predictions:
+        for i in range(len(np.unique(predicts))):
+            x_p[i].append(x[i])
+
     label_index = {v: k for k, v in data_gen.class_indices.items()}
     predicts = [label_index[p] for p in predicts]
-    df = pd.DataFrame(columns=['fname', 'class_1', 'class_2', 'over all'])
+    print('Unique Classes:', np.unique(predicts))
+    header_column = ['class_' + str(i+1) for i in range(len(np.unique(predicts)))]
+    header_column.insert(0, 'fname')
+    header_column.append('over all')
+    df = pd.DataFrame(columns=header_column)
     df['fname'] = [os.path.basename(x) for x in data_gen.filenames]
-    df['class_1'] = x_0
-    df['class_2'] = x_1
+    for i in range(len(np.unique(predicts))):
+        class_name = 'class_' + str(i+1)
+        df[class_name] = x_p[i]
+
     df['over all'] = predicts
     # save the predictions  of each case
     results_csv_file = ''.join([results_directory, 'predictions_', output_name, '_', results_id, '_.csv'])
@@ -446,9 +454,11 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
         if list_files:
             annotations_csv_data = list_files.pop()
             dir_annotations_csv = directory_to_evaluate + annotations_csv_data
-            auc = daa.calculate_auc_and_roc(results_csv_file, dir_annotations_csv, output_name, plot=False,
-                                            results_directory=results_directory, results_id=results_id, save_plot=True)
-            print(f'AUC: {auc}')
+
+            if len(np.unique(predicts)) == 2:
+                auc = daa.calculate_auc_and_roc(results_csv_file, dir_annotations_csv, output_name, plot=False,
+                                                results_directory=results_directory, results_id=results_id, save_plot=True)
+                print(f'AUC: {auc}')
         else:
             print(f'No annotation file found in {directory_to_evaluate}')
 
