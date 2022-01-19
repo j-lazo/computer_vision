@@ -860,12 +860,3 @@ def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_
 if __name__ == '__main__':
     dir_folder_experiments = ''
     compare_experiments(dir_folder_experiments, top_results=0.4)
-    #compare_results_overlay(dir_groundtruth, dir_predictions, dir_csv_file, save_directory=svae_dir)
-    # analyze_performances(dir_folder_experiments)
-    #compare_experiments(dir_folder_experiments, top_results=0.4)
-
-    #pass
-    #try:
-    #    app.run(analyze_data)
-    #except SystemExit:
-    #    pass
