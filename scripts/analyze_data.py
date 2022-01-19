@@ -15,9 +15,7 @@ flags.DEFINE_string('path_dir', '', 'path to directory')
 def run_experiment(_argv):
 
     if FLAGS.path_dir:
-        dam.generate_training_and_validation_sets(FLAGS.path_dir)
-
-
+        pass
 
 if __name__ == '__main__':
     try:

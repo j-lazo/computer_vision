@@ -607,7 +607,6 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
             print(f'Format or dir {file_to_predic} not understood')
 
 
-
 def main(_argv):
 
     name_model = FLAGS.name_model

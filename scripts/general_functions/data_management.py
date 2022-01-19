@@ -342,8 +342,7 @@ def convert_image_format(dir_images, input_format, target_format, output_directo
 
 
 def generate_training_and_validation_classification_sets(input_directory, output_directory,
-                                          case_probabilities=0.5, test_dataset='False',
-                                          pairs_of_data=[], convert_data=[]):
+                                          case_probabilities=0.5, test_dataset=False, sub_dirs=[], convert_data=[]):
 
     def _check_folder_exists(directory_path, sub_folders):
         if not os.path.isdir(directory_path):
@@ -351,54 +350,59 @@ def generate_training_and_validation_classification_sets(input_directory, output
             for folder in sub_folders:
                 os.mkdir(''.join([directory_path, '/', folder]))
 
-    def _copy_imgs(input_directory, list_destination_folders, case_probabilities):
-        files_path_images = "".join([input_directory, 'images/'])
-        original_images = sorted(os.listdir(files_path_images))
-        original_images = [image[:-4] for image in original_images]
-        label_images = [image[:-4] for image in label_images]
+    def _copy_imgs(input_directory, list_destination_folders, unique_cases=[], case_probabilities=0.5):
 
-        for i, image_name in enumerate(tqdm.tqdm(original_images, desc='Reading images and masks')):
+        if unique_cases != []:
+            for sub_dir in unique_cases:
+                files_path_images = "".join([input_directory, '/', sub_dir, '/'])
+                original_images = sorted(os.listdir(files_path_images))
 
-            destination_dir = random.choices(list_destination_folders, weights=case_probabilities)[0]
-            if image_name in label_images:
+                for i, image_name in enumerate(tqdm.tqdm(original_images, desc='Reading images')):
+                    destination_dir = random.choices(list_destination_folders, weights=case_probabilities).pop()
+                    if convert_data:
 
-                if not convert_data:
-                    if pairs_of_data:
-                        name_img = ''.join([image_name, pairs_of_data[0]])
-                        name_mask = ''.join([image_name, pairs_of_data[1]])
+                        input_format = convert_data[0]
+                        target_format = convert_data[1]
+                        img = cv2.imread(''.join([files_path_images, image_name]))
+                        destination_dir = ''.join([destination_dir, sub_dir, '/',
+                                                   image_name.replace(input_format, target_format)])
+                        cv2.imwrite(destination_dir, img)
+
                     else:
-                        name_img = ''.join([image_name, '.png'])
-                        name_mask = ''.join([image_name, '.png'])
+                        original_dir = ''.join([files_path_images, image_name])
+                        destination_dir = ''.join([destination_dir, sub_dir, '/', image_name])
+                        shutil.copy(original_dir, destination_dir)
+        else:
+            files_path_images = input_directory
+            original_images = sorted(os.listdir(files_path_images))
 
-                    shutil.copy(''.join([files_path_images, name_img]), ''.join([destination_dir, 'images/', name_img]))
-                    shutil.copy(''.join([files_path_masks, name_mask]), ''.join([destination_dir, 'masks/', name_mask]))
+            for i, image_name in enumerate(tqdm.tqdm(original_images, desc='Reading images')):
+                destination_dir = random.choices(list_destination_folders, weights=case_probabilities).pop()
+                if convert_data:
 
-                else:
                     input_format = convert_data[0]
                     target_format = convert_data[1]
+                    img = cv2.imread(''.join([files_path_images, image_name]))
+                    destination_dir = ''.join([destination_dir,
+                                               image_name.replace(input_format, target_format)])
+                    cv2.imwrite(destination_dir, img)
 
-                    img = cv2.imread(''.join([files_path_images, image_name, input_format]))
-                    cv2.imwrite(''.join([destination_dir, 'images/', image_name, target_format]), img)
+                else:
+                    original_dir = ''.join([files_path_images, image_name])
+                    destination_dir = ''.join([destination_dir, image_name])
+                    shutil.copy(original_dir, destination_dir)
 
-                    mask = cv2.imread(''.join([files_path_masks, image_name, input_format]))
-                    cv2.imwrite(''.join([destination_dir, 'masks/', image_name, target_format]), mask)
-
-
-            else:
-                print(f'the pair of {image_name} does not exists')
-
-    exists_subdir, sub_dirs = determine_if_subfolders_exists(input_directory)
     unique_cases = []
-
-    if exists_subdir:
+    if sub_dirs:
         for sub_dir in sub_dirs:
-            unique_cases.append(f for f in os.listdir(input_directory + sub_dir) if os.path.isdir(input_directory + sub_dir))
+            copy_dir = ''.join([input_directory, sub_dir, '/'])
+            unique_cases.append([f for f in os.listdir(copy_dir) if os.path.isdir(copy_dir + f)])
 
     else:
-        unique_cases.append(f for f in os.listdir(input_directory) if os.path.isdir(input_directory))
+        unique_cases.append([f for f in os.listdir(input_directory) if os.path.isdir(input_directory + f)])
 
     unique_cases = np.unique(unique_cases)
-    print(f'Sub-clases found:{unique_cases}')
+    print(f'Sub-classes found: {unique_cases}')
 
     training_dir = output_directory + 'train/'
     validation_dir = output_directory + 'val/'
@@ -412,13 +416,14 @@ def generate_training_and_validation_classification_sets(input_directory, output
         _check_folder_exists(test_dir, unique_cases)
         list_destination_folders.append(test_dir)
 
-    if exists_subdir:
+    if sub_dirs:
         for sub_dir in sub_dirs:
+            print(sub_dir)
             input_dir = ''.join([input_directory, sub_dir, '/'])
-            _copy_imgs(input_dir, list_destination_folders, training_percentage)
+            _copy_imgs(input_dir, list_destination_folders, unique_cases, case_probabilities)
 
     else:
-        _copy_imgs(input_directory, list_destination_folders, training_percentage
+        _copy_imgs(input_directory, list_destination_folders, unique_cases, case_probabilities)
 
 
 def generate_training_and_validation_segmenation_sets(input_directory, output_directory,
@@ -468,7 +473,7 @@ def generate_training_and_validation_segmenation_sets(input_directory, output_di
 
         for i, image_name in enumerate(tqdm.tqdm(original_images, desc='Reading images and masks')):
 
-            destination_dir = random.choices(list_destination_folders, weights=training_percentage)[0]
+            destination_dir = random.choices(list_destination_folders, weights=training_percentage).pop()
             if image_name in label_images:
 
                 if not convert_data:
