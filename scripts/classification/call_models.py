@@ -43,6 +43,7 @@ flags.DEFINE_bool('analyze_data', False,  'select if analyze data or not')
 flags.DEFINE_string('directory_model', '', 'indicate the path to the directory')
 flags.DEFINE_float('validation_split', 0.2, 'iif not validation dir but needed')
 flags.DEFINE_string('file_to_predic', '', 'Directory or file where to perform predictions if predict mode selected')
+flags.DEFINE_string('trainable_layers', '', 'Trainable layers in case backbone is trained')
 
 """
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
@@ -187,7 +188,6 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False):
     :param weights: (str) weights names (default imagenet)
     :return: sequential model with the selected weights
     """
-
     if name_model == 'vgg16':
         base_model = applications.vgg16.VGG16(include_top=include_top, weights=weights)
         base_model.trainable = False
@@ -229,6 +229,7 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False):
         input_size = (299, 299, 3)
 
     print('PRETRAINED Model')
+
     base_model.summary()
     return base_model, input_size
 
@@ -245,16 +246,36 @@ def load_cap_models(name_model, num_classes):
     return cap_model
 
 
-def build_model(name_model, backbone_model='', num_classes=1, include_top=False):
+def build_model(name_model, learning_rate, backbone_model='', num_classes=1,
+                include_top=False, train_backbone=False, trainable_layers=-1,
+                optimizer='adam', loss='categorical_crossentropy',
+                metrics=["accuracy", tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]):
+
     # initialize model
     model = Sequential()
     # load the backbone
     base_model, input_shape_backbone = load_pretrained_model(backbone_model, include_top=include_top)
-    base_model.trainable = False
     # load the cap
     cap_model = load_cap_models(name_model, num_classes)
+    print(trainable_layers)
+    print(type(trainable_layers))
+    print(trainable_layers.split())
+    #s = slice(start, stop, step)
+    if train_backbone is True:
+        for layer in base_model.layers[trainable_layers]:
+            print(layer)
+            layer.trainable = False
+    else:
+        base_model.trainable = False
+
     model.add(base_model)
     model.add(cap_model)
+    if optimizer == 'adam':
+        optimizer = Adam(learning_rate=learning_rate)
+    elif optimizer == 'sgd':
+        optimizer = SGD(learning_rate=learning_rate, momentum=0.9)
+
+    model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
     return model
 
@@ -467,11 +488,10 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_data_dir='',
                 test_data='', results_dir=os.getcwd() + '/results/', epochs=2, batch_size=4, learning_rate=0.001,
                 backbone_model='', eval_val_set=False, eval_train_set=False, analyze_data=False, directory_model='',
-                file_to_predic=''):
+                file_to_predic='', trainable_layers=-1):
 
-    # Decide how to act according to the mode (train/predict)
-    if mode == 'train':
-
+    # Decide how to act according to the mode (train/predict/train-backbone... )
+    if mode == 'train' or mode == 'train_backbone':
         # Determine what is the structure of the data directory,
         # if the directory contains train/val datasets
         if validation_data_dir == '':
@@ -493,11 +513,11 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                                                       batch_size=batch_size)
 
         # load the model
-        model = build_model(name_model, backbone_model, num_classes)
-        adam = Adam(learning_rate=learning_rate)
-        sgd = SGD(learning_rate=learning_rate, momentum=0.9)
-        metrics = ["accuracy",  tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
-        model.compile(optimizer=adam, loss='categorical_crossentropy', metrics=metrics)
+        if mode == 'train_backbone':
+            train_backbone = True
+
+        model = build_model(name_model, learning_rate, backbone_model, num_classes,
+                            train_backbone=train_backbone, trainable_layers=trainable_layers)
         model.summary()
 
         # define a dir to save the results and Checkpoints
@@ -606,6 +626,11 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
         else:
             print(f'Format or dir {file_to_predic} not understood')
 
+        pass
+
+    else:
+        print(f'Mode:{mode} not understood')
+
 
 def main(_argv):
 
@@ -620,24 +645,28 @@ def main(_argv):
     analyze_data = FLAGS.analyze_data
     directory_model = FLAGS.directory_model
     file_to_predic = FLAGS.file_to_predic
-
+    trainable_layers = FLAGS.trainable_layers
     if mode == 'predict':
         if directory_model == '':
             raise ValueError('No directory of the model indicated')
         else:
             if file_to_predic == '':
                 raise ValueError('No test dataset, image or video indicated')
+    if mode == 'train_backbone':
+        if trainable_layers == '':
+            raise ValueError(f'Mode: {mode} selected, please indicate the layers of the backbone to train')
 
     """
     e.g: 
     call_models.py --name_model=simple_fc --backbone=VGG19 --mode=train --batch_size=4
-    --dataset_dir=directory/to/train/data/ --batch_size=16  --epochs=5
+    --dataset_dir=directory/to/train/data/ --batch_size=16  --epochs=5 
     """
 
     print('INFORMATION:', name_model, backbone_model, mode)
     call_models(name_model, mode, data_dir=data_dir, backbone_model=backbone_model,
                 batch_size=batch_zie, epochs=epochs, test_data=test_data,
-                analyze_data=analyze_data, directory_model=directory_model, file_to_predic=file_to_predic)
+                analyze_data=analyze_data, directory_model=directory_model, file_to_predic=file_to_predic,
+                trainable_layers=trainable_layers)
 
 
 if __name__ == '__main__':

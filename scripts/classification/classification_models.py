@@ -27,6 +27,7 @@ def feature_extractor(base_model, directory, sample_count, image_size=(224, 224)
             break
     return features, labels
 
+
 def simple_fc(num_classes):
     """
     Simple Fully Connected Cap layer
