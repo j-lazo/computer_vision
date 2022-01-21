@@ -439,7 +439,7 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 
     # load the data to evaluate and predict
     data_gen, _ = load_data(directory_to_evaluate, backbone_model=backbone_model,
-                                  batch_size=1, prediction_mode=True)
+                                  batch_size=1, prediction_mode=False)
 
     evaluation = model.evaluate(data_gen, verbose=True)
     print('Evaluation results:')
