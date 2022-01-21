@@ -43,7 +43,7 @@ flags.DEFINE_bool('analyze_data', False,  'select if analyze data or not')
 flags.DEFINE_string('directory_model', '', 'indicate the path to the directory')
 flags.DEFINE_float('validation_split', 0.2, 'iif not validation dir but needed')
 flags.DEFINE_string('file_to_predic', '', 'Directory or file where to perform predictions if predict mode selected')
-flags.DEFINE_string('trainable_layers', '', 'Trainable layers in case backbone is trained')
+flags.DEFINE_integer('trainable_layers', -1, 'Trainable layers in case backbone is trained')
 
 """
 flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
@@ -59,6 +59,7 @@ flags.DEFINE_enum('transfer', 'none',
                   'fine_tune: Transfer all and freeze darknet only')
 flags.DEFINE_integer('size', '', 'image size')
 """
+
 
 class DataGenerator(tf.keras.utils.Sequence):
     # Generates data for Keras
@@ -139,14 +140,6 @@ def make_predictions(model, innput_frame, output_size=(300, 300)):
     w, h, d = np.shape(output_imgage)
     # calculate the center points of the lumen according to the detected mask
     point_x, point_y = cvf.detect_dark_region(mask, output_imgage)
-
-    #if not(np.isnan(point_x)):
-    #    cv2.circle(output_imgage, (int(point_x), int(point_y)), 45, (0, 0, 255), 2)
-    #if not(np.isnan(point_y)):
-    #    cv2.circle(output_imgage, (int(point_x), int(point_y)), 25, (0, 0, 255), 2)
-    #    cv2.line(output_imgage, (int(point_x), int(point_y)), (int(w / 2), int(h / 2)), (255, 0, 0), 4)
-    # center of the image
-    #cv2.rectangle(output_imgage, (int(w / 2) - 3, int(h / 2) - 3), (int(w / 2) + 3, int(h / 2) + 3),  (0, 255, 255), -1)
 
     return output_imgage, point_x, point_y
 
@@ -257,12 +250,20 @@ def build_model(name_model, learning_rate, backbone_model='', num_classes=1,
     base_model, input_shape_backbone = load_pretrained_model(backbone_model, include_top=include_top)
     # load the cap
     cap_model = load_cap_models(name_model, num_classes)
-    print(trainable_layers)
-    print(type(trainable_layers))
-    print(trainable_layers.split())
-    #s = slice(start, stop, step)
+
+    if type(trainable_layers) is tuple:
+        if len(trainable_layers) == 2:
+            slice_trainables = (trainable_layers[0], trainable_layers[1], 1)
+        elif len(trainable_layers) == 3:
+            slice_trainables = (trainable_layers[0], trainable_layers[1], trainable_layers[2])
+        else:
+            raise ValueError(f'var:{trainable_layers} not understood: '
+                             f' should be int, or tuple with max 3 elements')
+    else:
+        slice_trainables = (trainable_layers, -1, 1)
+
     if train_backbone is True:
-        for layer in base_model.layers[trainable_layers]:
+        for layer in base_model.layers[slice(slice_trainables)]:
             print(layer)
             layer.trainable = False
     else:
@@ -653,7 +654,7 @@ def main(_argv):
             if file_to_predic == '':
                 raise ValueError('No test dataset, image or video indicated')
     if mode == 'train_backbone':
-        if trainable_layers == '':
+        if trainable_layers == -1:
             raise ValueError(f'Mode: {mode} selected, please indicate the layers of the backbone to train')
 
     """
