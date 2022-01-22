@@ -20,6 +20,7 @@ def run_experiment(_argv):
     path_list = base_dir.split(os.sep)
     #data_dir = os.path.join(*path_list[:-1], 'datasets/tissue_classification/')
     data_dir = os.path.join(os.getcwd(), '/datasets/tissue_classification/')
+    print(os.getcwd(), data_dir)
     test_data = data_dir + 'test/'
     results_dir = data_dir + 'results/'
     analyze_data = True
@@ -29,7 +30,8 @@ def run_experiment(_argv):
                                       backbone_model=backbone_model, batch_size=batch_zie,
                                       epochs=epochs, test_data=test_data,
                                       analyze_data=analyze_data,
-                                      learning_rate=learning_rate)
+                                      learning_rate=learning_rate,
+                          results_dir=results_dir)
 
 
 if __name__ == '__main__':
