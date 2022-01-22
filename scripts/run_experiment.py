@@ -5,8 +5,7 @@ from absl.flags import FLAGS
 from general_functions import data_management as dam
 from matplotlib import pyplot as plt
 import cv2
-import classification as img_class
-
+from classification import call_models as img_class
 flags.DEFINE_string('data_dir', '', 'path to directory')
 
 
@@ -26,7 +25,7 @@ def run_experiment(_argv):
     analyze_data = True
 
     print('INFORMATION:', name_model, backbone_model, mode)
-    img_class.call_models.call_models(name_model, mode, data_dir=data_dir,
+    img_class.call_models(name_model, mode, data_dir=data_dir,
                                       backbone_model=backbone_model, batch_size=batch_zie,
                                       epochs=epochs, test_data=test_data,
                                       analyze_data=analyze_data,
