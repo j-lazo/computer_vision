@@ -26,7 +26,7 @@ sys.path.append(os.getcwd() + '/scripts/general_functions/')
 
 import data_management as dam
 import data_analysis as daa
-import classification_models as cms
+from classification import classification_models as cms
 
 flags.DEFINE_string('name_model', '', 'name of the model')
 flags.DEFINE_string('mode', '', 'train, predict, train_backbone')
@@ -439,7 +439,7 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 
     # load the data to evaluate and predict
     data_gen, _ = load_data(directory_to_evaluate, backbone_model=backbone_model,
-                                  batch_size=1, prediction_mode=False)
+                                  batch_size=1, prediction_mode=True)
 
     evaluation = model.evaluate(data_gen, verbose=True)
     print('Evaluation results:')
