@@ -15,11 +15,12 @@ def run_experiment(_argv):
     mode = 'train'
     batch_zie = 8
     learning_rate = 0.001
-    epochs = 200
+    epochs = 1
     base_dir = os.path.normpath(os.getcwd())
     path_list = base_dir.split(os.sep)
     #data_dir = os.path.join(*path_list[:-1], 'datasets/tissue_classification/')
-    data_dir = os.path.join(os.getcwd(), '/datasets/tissue_classification/')
+    data_dir = ''.join([os.getcwd(), '/datasets/tissue_classification/'])
+    print(os.getcwd())
     print(os.getcwd(), data_dir)
     test_data = data_dir + 'test/'
     results_dir = data_dir + 'results/'

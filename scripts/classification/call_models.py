@@ -383,7 +383,7 @@ def load_data(data_dir, annotations_file='', backbone_model='',
                     all_imgs = os.listdir(''.join([data_dir, subdir, '/']))
                     total_all_imgs = total_all_imgs + len(all_imgs)
                     data_generator = data_idg.flow_from_directory(data_dir,
-                                                                  batch_size=total_all_imgs,
+                                                                  batch_size=15,
                                                                   class_mode='categorical',
                                                                   target_size=(img_width, img_height),
                                                                   shuffle=False)
@@ -439,7 +439,7 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 
     # load the data to evaluate and predict
     data_gen, _ = load_data(directory_to_evaluate, backbone_model=backbone_model,
-                                  batch_size=1, prediction_mode=True)
+                                  batch_size=13, prediction_mode=True)
 
     evaluation = model.evaluate(data_gen, verbose=True)
     print('Evaluation results:')
@@ -461,6 +461,7 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     header_column.append('over all')
     df = pd.DataFrame(columns=header_column)
     df['fname'] = [os.path.basename(x) for x in data_gen.filenames]
+    print(len(x_p))
     for i in range(len(np.unique(predicts))):
         class_name = 'class_' + str(i+1)
         df[class_name] = x_p[i]
@@ -516,13 +517,15 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
         # load the model
         if mode == 'train_backbone':
             train_backbone = True
+        else:
+            train_backbone = False
 
         model = build_model(name_model, learning_rate, backbone_model, num_classes,
                             train_backbone=train_backbone, trainable_layers=trainable_layers)
         model.summary()
 
         # define a dir to save the results and Checkpoints
-        # if results directory doesn't exists create it
+        # if results directory doesn't exist create it
         if not os.path.isdir(results_dir):
             os.mkdir(results_dir)
 
@@ -666,7 +669,8 @@ def main(_argv):
     print('INFORMATION:', name_model, backbone_model, mode)
     call_models(name_model, mode, data_dir=data_dir, backbone_model=backbone_model,
                 batch_size=batch_zie, epochs=epochs, test_data=test_data,
-                analyze_data=analyze_data, directory_model=directory_model, file_to_predic=file_to_predic,
+                analyze_data=analyze_data, directory_model=directory_model,
+                file_to_predic=file_to_predic,
                 trainable_layers=trainable_layers)
 
 
