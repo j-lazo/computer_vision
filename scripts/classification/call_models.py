@@ -361,8 +361,8 @@ def load_data(data_dir, annotations_file='', backbone_model='',
         pass
 
     if annotations_file == '':
-        # determine if the structure of the directory is divided by classes or there is an annotation file
-        print(data_dir)
+        # determine if the structure of the directory is divided by classes or if there is an annotation file
+        print(f'Loading data from dir: {data_dir}')
         files_dir = [f for f in os.listdir(data_dir) if os.path.isdir(data_dir+f)]
         num_classes = len(files_dir)
         # if the number of sub-folders is less than two then it supposes that
@@ -435,7 +435,7 @@ def train_model(model, training_generator, validation_generator, epochs,
 def evaluate_and_predict(model, directory_to_evaluate, results_directory,
                          output_name='', results_id='', backbone_model='', batch_size=1,
                          analyze_data=False, output_dir=''):
-    print(f'Evaluation of {directory_to_evaluate}')
+    print(f'Evaluation of: {directory_to_evaluate}')
 
     # load the data to evaluate and predict
     data_gen, _ = load_data(directory_to_evaluate, backbone_model=backbone_model,
@@ -444,12 +444,12 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     evaluation = model.evaluate(data_gen, verbose=True)
     print('Evaluation results:')
     print(evaluation)
-    predictions = model.predict(data_gen, verbose=True, steps=1)
+    predictions = model.predict(data_gen, verbose=True)
 
     # determine the top-1 prediction class
     predicts = np.argmax(predictions, axis=1)
 
-    x_p = [[] for _ in range(len(np.unique(predicts)))]
+    x_p = x_p = [[] for _ in range(len(np.unique(predicts)))]
     for x in predictions:
         for i in range(len(np.unique(predicts))):
             x_p[i].append(x[i])
@@ -461,7 +461,7 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     header_column.append('over all')
     df = pd.DataFrame(columns=header_column)
     df['fname'] = [os.path.basename(x) for x in data_gen.filenames]
-    print(len(x_p))
+
     for i in range(len(np.unique(predicts))):
         class_name = 'class_' + str(i+1)
         df[class_name] = x_p[i]
@@ -564,8 +564,9 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
             sub_dirs = [f for f in os.listdir(test_data) if os.path.isdir(test_data + f)]
             if sub_dirs:
                 for sub_dir in sub_dirs:
-                    sub_sub_dirs = [f for f in os.listdir(test_data + sub_dir) if os.path.isdir(test_data + sub_dir + f)]
+                    sub_sub_dirs = [f for f in os.listdir(test_data + sub_dir) if os.path.isdir(''.join([test_data, sub_dir, '/', f]))]
                     if sub_sub_dirs:
+                        print(f'Sub-directories:{sub_dirs} found in {test_data}')
                         # this means that inside each sub-dir there is more directories so we can iterate over the previous one
                         name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
                                              results_id=new_results_id, output_name=sub_dir,
