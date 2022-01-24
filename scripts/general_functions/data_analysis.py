@@ -248,8 +248,8 @@ def read_img_results(dir_image):
 
 def compare_box_plots(general_directory = '', name_test_csv_file='', name_validation_csv_file='',
                       save_directory='', condition_name=''):
-    """
 
+    """
     :param general_directory:
     :param name_test_csv_file:
     :param name_validation_csv_file:

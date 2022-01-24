@@ -145,7 +145,7 @@ def make_predictions(model, innput_frame, output_size=(300, 300)):
 
 
 def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', backbone_model='',
-                           prediction_model=''):
+                           prediction_model='', mode=''):
     """
     Generate a ID name for the experiment considering the name of the model, the learning rate,
     the batch size, and the date of the experiment
@@ -156,13 +156,18 @@ def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', b
     :param backbone_model: (str)
     :return: (str) id name
     """
+    if type(learning_rate) == list:
+        lr = learning_rate[0]
+    else:
+        lr = learning_rate
+
     if prediction_model == '':
         training_date_time = datetime.datetime.now()
         if backbone_model != '':
             name_mod = ''.join([name_model, '+', backbone_model])
         else:
             name_mod = name_model
-        id_name = ''.join([name_mod, '_lr_', str(learning_rate),
+        id_name = ''.join([name_mod, '_', mode, '_lr_', str(lr),
                                   '_bs_', str(batch_size), '_',
                                   training_date_time.strftime("%d_%m_%Y_%H_%M")
                                   ])
@@ -173,7 +178,7 @@ def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', b
     return id_name
 
 
-def load_pretrained_model(name_model, weights='imagenet', include_top=False):
+def load_pretrained_model(name_model, weights='imagenet', include_top=False, trainable=False):
 
     """
     Loads a pretrained model given a name
@@ -183,42 +188,42 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False):
     """
     if name_model == 'vgg16':
         base_model = applications.vgg16.VGG16(include_top=include_top, weights=weights)
-        base_model.trainable = False
+        base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'vgg19':
         base_model = applications.vgg19.VGG19(include_top=include_top, weights=weights)
-        base_model.trainable = False
+        base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'inception_v3':
         base_model = applications.inception_v3.InceptionV3(include_top=include_top, weights=weights)
-        base_model.trainable = False
+        base_model.trainable = trainable
         input_size = (299, 299, 3)
 
     elif name_model == 'resnet50':
         base_model = applications.resnet50.ResNet50(include_top=include_top, weights=weights)
-        base_model.trainable = False
+        base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'resnet101':
         base_model = applications.resnet.ResNet101(include_top=include_top, weights=weights)
-        base_model.trainable = False
+        base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'mobilenet':
         base_model = applications.mobilenet.MobileNet(include_top=include_top, weights=weights)
-        base_model.trainable = False
+        base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'densenet':
         base_model = applications.densenet.DenseNet121(include_top=include_top, weights=weights)
-        base_model.trainable = False
+        base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'xception':
         base_model = applications.xception.Xception(include_top=include_top, weights=weights)
-        base_model.trainable = False
+        base_model.trainable = trainable
         input_size = (299, 299, 3)
 
     print('PRETRAINED Model')
@@ -246,37 +251,41 @@ def build_model(name_model, learning_rate, backbone_model='', num_classes=1,
 
     # initialize model
     model = Sequential()
-    # load the backbone
-    base_model, input_shape_backbone = load_pretrained_model(backbone_model, include_top=include_top)
+
     # load the cap
     cap_model = load_cap_models(name_model, num_classes)
 
-    if type(trainable_layers) is tuple:
-        if len(trainable_layers) == 2:
-            slice_trainables = (trainable_layers[0], trainable_layers[1], 1)
-        elif len(trainable_layers) == 3:
-            slice_trainables = (trainable_layers[0], trainable_layers[1], trainable_layers[2])
-        else:
-            raise ValueError(f'var:{trainable_layers} not understood: '
-                             f' should be int, or tuple with max 3 elements')
-    else:
-        slice_trainables = (trainable_layers, -1, 1)
-
     if train_backbone is True:
-        for layer in base_model.layers[slice(slice_trainables)]:
-            print(layer)
-            layer.trainable = False
+        # load the backbone
+        base_model, input_shape_backbone = load_pretrained_model(backbone_model, include_top=include_top,
+                                                                 trainable=True)
+        if type(learning_rate) == list:
+            lr = learning_rate[0]
+        else:
+            lr = learning_rate
+
+        for i, layer in enumerate(base_model.layers):
+            if i in range(len(base_model.layers) + trainable_layers, len(base_model.layers)):
+                layer.trainable = True
+            else:
+                layer.trainable = False
     else:
+        base_model, input_shape_backbone = load_pretrained_model(backbone_model, include_top=include_top,
+                                                                 trainable=False)
         base_model.trainable = False
 
+    base_model.compile()
+    base_model.summary()
     model.add(base_model)
     model.add(cap_model)
+
     if optimizer == 'adam':
-        optimizer = Adam(learning_rate=learning_rate)
+        optimizer = Adam(learning_rate=lr)
     elif optimizer == 'sgd':
-        optimizer = SGD(learning_rate=learning_rate, momentum=0.9)
+        optimizer = SGD(learning_rate=lr, momentum=0.9)
 
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+    model.summary()
 
     return model
 
@@ -305,6 +314,50 @@ def load_model(directory_model):
     input_size = (len(model.layers[0].output_shape[:]))
 
     return model, input_size
+
+
+def fine_tune_backbone(model, training_generator, validation_generator, epochs,
+                batch_size, results_directory, new_results_id, shuffle=1, verbose=1,
+                       learning_rate=0.001, trainable_layers=-1, optimizer='adam',
+                       loss='categorical_crossentropy',
+                       metrics=["accuracy", tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]):
+
+    print('Fine-tuning model')
+    temp_name_model = results_directory + new_results_id + "_fine_tuned_model.h5"
+    callbacks = [
+        ModelCheckpoint(temp_name_model,
+                        monitor="val_loss", save_best_only=True),
+        ReduceLROnPlateau(monitor='val_loss', patience=25),
+        CSVLogger(results_directory + 'fine_tune_train_history_' + new_results_id + "_.csv"),
+        EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)]
+
+    model.fit(training_generator,
+              epochs=epochs,
+              shuffle=shuffle,
+              batch_size=batch_size,
+              validation_data=validation_generator,
+              verbose=verbose,
+              callbacks=callbacks)
+
+    if type(learning_rate) == list:
+        lr = learning_rate[1]
+    else:
+        lr = learning_rate
+
+    # Freeze the weights of the backbone
+    model.layers[0].trainable = False
+    # Now just train the cap-model
+    model.layers[-1].trainable = True
+
+    print('LR:', lr)
+    if optimizer == 'adam':
+        optimizer = Adam(learning_rate=lr)
+    elif optimizer == 'sgd':
+        optimizer = SGD(learning_rate=lr, momentum=0.9)
+
+    model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+
+    return model
 
 
 def generate_dict_x_y(general_dict):
@@ -487,10 +540,40 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     return results_csv_file
 
 
+def evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model, analyze_data=True):
+
+    # determine if there are sub_folders or if it's the absolute path of the dataset
+    sub_dirs = [f for f in os.listdir(test_data) if os.path.isdir(test_data + f)]
+    if sub_dirs:
+        for sub_dir in sub_dirs:
+            sub_sub_dirs = [f for f in os.listdir(test_data + sub_dir) if
+                            os.path.isdir(''.join([test_data, sub_dir, '/', f]))]
+            if sub_sub_dirs:
+                print(f'Sub-directories:{sub_dirs} found in {test_data}')
+                # this means that inside each sub-dir there is more directories so we can iterate over the previous one
+                name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
+                                                 results_id=new_results_id, output_name=sub_dir,
+                                                 backbone_model=backbone_model, analyze_data=analyze_data)
+
+                print(f'Evaluation results saved at {name_file}')
+            else:
+                name_file = evaluate_and_predict(model, test_data, results_directory,
+                                                 results_id=new_results_id, output_name='test',
+                                                 backbone_model=backbone_model, analyze_data=analyze_data)
+                print(f'Evaluation results saved at {name_file}')
+                break
+
+    else:
+        name_file = evaluate_and_predict(model, test_data, results_directory,
+                                         results_id=new_results_id, output_name='test',
+                                         backbone_model=backbone_model, analyze_data=analyze_data)
+        print(f'Evaluation results saved at {name_file}')
+
+
 def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_data_dir='',
                 test_data='', results_dir=os.getcwd() + '/results/', epochs=2, batch_size=4, learning_rate=0.001,
                 backbone_model='', eval_val_set=False, eval_train_set=False, analyze_data=False, directory_model='',
-                file_to_predic='', trainable_layers=-1):
+                file_to_predic='', trainable_layers=-1, fine_tune_epochs=1):
 
     # Decide how to act according to the mode (train/predict/train-backbone... )
     if mode == 'train' or mode == 'train_backbone':
@@ -504,7 +587,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
             if 'val' in sub_dirs:
                 validation_data_dir = data_dir + 'val/'
             else:
-                print(f'not recognized substructure found in {data_dir}, please indicate the validation dataset')
+                print(f'substructure found in {data_dir} not recognized  , please indicate the validation(val) dataset')
         else:
             train_data_dir = data_dir
 
@@ -514,16 +597,6 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
         validation_generator, num_classes = load_data(validation_data_dir, backbone_model=backbone_model,
                                                       batch_size=batch_size)
 
-        # load the model
-        if mode == 'train_backbone':
-            train_backbone = True
-        else:
-            train_backbone = False
-
-        model = build_model(name_model, learning_rate, backbone_model, num_classes,
-                            train_backbone=train_backbone, trainable_layers=trainable_layers)
-        model.summary()
-
         # define a dir to save the results and Checkpoints
         # if results directory doesn't exist create it
         if not os.path.isdir(results_dir):
@@ -531,16 +604,37 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
 
         # ID name for the folder and results
         new_results_id = generate_experiment_ID(name_model=name_model, learning_rate=learning_rate,
-                                                batch_size=batch_size, backbone_model=backbone_model)
+                                                batch_size=batch_size, backbone_model=backbone_model,
+                                                mode=mode)
 
         results_directory = ''.join([results_dir, new_results_id, '/'])
         # if results experiment doesn't exists create it
         if not os.path.isdir(results_directory):
             os.mkdir(results_directory)
 
+        # Build the model
+        if mode == 'train_backbone':
+            train_backbone = True
+        else:
+            train_backbone = False
+
+        model = build_model(name_model, learning_rate, backbone_model, num_classes,
+                            train_backbone=train_backbone, trainable_layers=trainable_layers)
+
+        if train_backbone is True:
+
+            model = fine_tune_backbone(model, training_generator, validation_generator, fine_tune_epochs,
+                    batch_size, results_directory, new_results_id, trainable_layers=trainable_layers,
+                                       learning_rate=learning_rate)
+
+            if test_data != '':
+                evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model,
+                                       analyze_data=True)
+
         # track time
         start_time = datetime.datetime.now()
         # Train the model
+
         trained_model = train_model(model, training_generator, validation_generator, epochs,
                     batch_size, results_directory, new_results_id)
 
@@ -560,31 +654,8 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                                  results_id=new_results_id, output_name='train',
                                  backbone_model=backbone_model)
         if test_data != '':
-            # determine if there are sub_folders or if it's the absolute path of the dataset
-            sub_dirs = [f for f in os.listdir(test_data) if os.path.isdir(test_data + f)]
-            if sub_dirs:
-                for sub_dir in sub_dirs:
-                    sub_sub_dirs = [f for f in os.listdir(test_data + sub_dir) if os.path.isdir(''.join([test_data, sub_dir, '/', f]))]
-                    if sub_sub_dirs:
-                        print(f'Sub-directories:{sub_dirs} found in {test_data}')
-                        # this means that inside each sub-dir there is more directories so we can iterate over the previous one
-                        name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
-                                             results_id=new_results_id, output_name=sub_dir,
-                                             backbone_model=backbone_model, analyze_data=analyze_data)
-
-                        print(f'Evaluation results saved at {name_file}')
-                    else:
-                        name_file = evaluate_and_predict(model, test_data, results_directory,
-                                                         results_id=new_results_id, output_name='test',
-                                                         backbone_model=backbone_model, analyze_data=analyze_data)
-                        print(f'Evaluation results saved at {name_file}')
-                        break
-
-            else:
-                name_file = evaluate_and_predict(model, test_data, results_directory,
-                                     results_id=new_results_id, output_name='test',
-                                     backbone_model=backbone_model, analyze_data=analyze_data)
-                print(f'Evaluation results saved at {name_file}')
+            evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model,
+                                   analyze_data=True)
 
     elif mode == 'predict':
         model, _ = load_model(directory_model)
@@ -599,31 +670,8 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
             if not os.path.isdir(file_to_predic):
                 os.mkdir(file_to_predic)
 
-            # determine if there are sub_folders or if it's the absolute path of the dataset
-            sub_dirs = [f for f in os.listdir(file_to_predic) if os.path.isdir(file_to_predic + f)]
-            if sub_dirs:
-                for sub_dir in sub_dirs:
-                    sub_sub_dirs = [f for f in os.listdir(file_to_predic + sub_dir) if
-                                    os.path.isdir(file_to_predic + sub_dir + f)]
-                    if sub_sub_dirs:
-                        # this means that inside each sub-dir there is more directories so we can iterate over the previous one
-                        name_file = evaluate_and_predict(model, ''.join([file_to_predic, sub_dir, '/']), results_directory,
-                                                         results_id=new_results_id, output_name=sub_dir,
-                                                         backbone_model=backbone_model, analyze_data=analyze_data)
-
-                        print(f'Evaluation results saved at {name_file}')
-                    else:
-                        name_file = evaluate_and_predict(model, file_to_predic, results_directory,
-                                                         results_id=new_results_id, output_name='test',
-                                                         backbone_model=backbone_model, analyze_data=analyze_data)
-                        print(f'Evaluation results saved at {name_file}')
-                        break
-
-            else:
-                name_file = evaluate_and_predict(model, file_to_predic, results_directory,
-                                                 results_id=new_results_id, output_name='test',
-                                                 backbone_model=backbone_model, analyze_data=analyze_data)
-                print(f'Evaluation results saved at {name_file}')
+            evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model,
+                                   analyze_data=True)
 
         elif file_to_predic == 'webcam':
             pass
