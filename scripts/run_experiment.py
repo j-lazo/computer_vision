@@ -12,11 +12,11 @@ def run_experiment(_argv):
 
     dataset = 'tissue_classification'
     name_model = 'fc_3layers'
-    backbone_model = 'inception_v3'
+    backbone_model = 'resnet101'
     mode = 'train_backbone'
     batch_zie = 8
     learning_rate = 0.001
-    epochs = 15
+    epochs = 7
     base_dir = os.path.normpath(os.getcwd())
     path_list = base_dir.split(os.sep)
     data_dir = ''.join([os.getcwd(), '/datasets/', dataset, '/'])
@@ -25,10 +25,10 @@ def run_experiment(_argv):
     results_dir = data_dir + 'results/'
     analyze_data = True
     trainable_layers = - 7
-    fine_tune_epochs = 5
+    fine_tune_epochs = 3
 
     if mode == 'train_backbone':
-        learning_rate = [1e-6, 0.001]
+        learning_rate = [1e-5, 0.001]
 
     print('EXPERIMENT INFORMATION:', name_model, backbone_model, mode)
     img_class.call_models(name_model, mode, data_dir=data_dir,

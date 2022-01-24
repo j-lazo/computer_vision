@@ -255,14 +255,15 @@ def build_model(name_model, learning_rate, backbone_model='', num_classes=1,
     # load the cap
     cap_model = load_cap_models(name_model, num_classes)
 
+    if type(learning_rate) == list:
+        lr = learning_rate[0]
+    else:
+        lr = learning_rate
+
     if train_backbone is True:
         # load the backbone
         base_model, input_shape_backbone = load_pretrained_model(backbone_model, include_top=include_top,
                                                                  trainable=True)
-        if type(learning_rate) == list:
-            lr = learning_rate[0]
-        else:
-            lr = learning_rate
 
         for i, layer in enumerate(base_model.layers):
             if i in range(len(base_model.layers) + trainable_layers, len(base_model.layers)):
@@ -628,7 +629,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                                        learning_rate=learning_rate)
 
             if test_data != '':
-                evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model,
+                evalute_test_directory(model, test_data, results_directory, new_results_id + '(_pre)', backbone_model,
                                        analyze_data=True)
 
         # track time
