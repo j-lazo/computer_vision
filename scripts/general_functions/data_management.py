@@ -145,7 +145,6 @@ def colorize(image, hue):
     return new_img
 
 
-
 def augment_image(img, mask):
     """
 
@@ -256,7 +255,7 @@ def augment_image(img, mask):
     augmented_imgs.append(saturated.numpy())
     augmented_masks.append(mask_choice_7)
 
-    return  augmented_imgs, augmented_masks, list_operations
+    return augmented_imgs, augmented_masks, list_operations
 
 
 def augment_dataset(files_path, destination_path='', visualize_augmentation=False):
@@ -302,7 +301,6 @@ def augment_dataset(files_path, destination_path='', visualize_augmentation=Fals
             cv2.imwrite("".join([destination_path, 'masks/', element[:-4], '_', str(i).zfill(3), '.png']), list_masks[i])
 
 
-
 def check_folder_exists(folder_dir, create_folder=False):
     """
     Checks if a directory exits. If the flag create folder is selected it creates the sub-folders 'images' and 'masks'
@@ -321,6 +319,7 @@ def check_folder_exists(folder_dir, create_folder=False):
     else:
         exists = True
     return exists
+
 
 def convert_image_format(dir_images, input_format, target_format, output_directory):
     """
@@ -593,6 +592,7 @@ def convert_cvs_data_to_imgs(base_directory, csv_file_dir='', directory_imgs='',
         else:
             mask = np.zeros(np.shape(img))
             cv2.imwrite(''.join([output_directory, '/', img]), mask)
+
 
 def discrepancies(file_1, file_2):
     """
@@ -1027,6 +1027,36 @@ def arrange_dataset(directory_path):
         df.to_csv(directory_path + case + '/' + new_csv_file_name)
 
 
+def merge_annotations_data(annotations_list, selected_elements=[]):
+
+    data_frames = [[] for _ in range(len(annotations_list))]
+
+    for i, file in enumerate(tqdm.tqdm(annotations_list[:], desc='Reading csv files')):
+        data_frames[i] = pd.read_csv(file).set_index('image_name')
+
+    df = pd.concat(data_frames)
+    df.pop("Unnamed: 0")
+
+    list_index = df.index.values.tolist()
+    for name in list_index:
+        df = df.rename(index={name: name.replace(' ', '')})
+
+    list_index = df.index.values.tolist()
+    new_df = pd.DataFrame(columns=df.columns)
+    print(new_df)
+
+    if selected_elements:
+        for element in selected_elements:
+            if element in list_index:
+                idx = list_index.index(element)
+                rowData = df.loc[element, :]
+                new_df = new_df.append(rowData)
+            else:
+                print(element, 'not found')
+
+    print(df)
+    df.to_csv('test.csv')
+    return 0
 
 
 if __name__ == "__main__":
