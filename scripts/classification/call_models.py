@@ -60,7 +60,6 @@ flags.DEFINE_enum('transfer', 'none',
 flags.DEFINE_integer('size', '', 'image size')
 """
 
-
 class DataGenerator(tf.keras.utils.Sequence):
     # Generates data for Keras
     def __init__(self, list_IDs, labels, batch_size=32, dim=(64, 64), n_channels=1,
@@ -119,6 +118,7 @@ class DataGenerator(tf.keras.utils.Sequence):
 
         return x, tf.keras.utils.to_categorical(y, num_classes=self.n_classes)
 
+base_dir_weights = ''.join([os.getcwd(), '/scripts/classification/weights/weights_pretrained_models/'])
 
 def make_predictions(model, innput_frame, output_size=(300, 300)):
     # get the input size of the network
@@ -181,6 +181,7 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False):
     :param weights: (str) weights names (default imagenet)
     :return: sequential model with the selected weights
     """
+
     if name_model == 'vgg16':
         base_model = applications.vgg16.VGG16(include_top=include_top, weights=weights)
         base_model.trainable = False
@@ -197,7 +198,8 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False):
         input_size = (299, 299, 3)
 
     elif name_model == 'resnet50':
-        base_model = applications.resnet50.ResNet50(include_top=include_top, weights=weights)
+        weights_dir = base_dir_weights + 'resnet50/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+        base_model = applications.resnet50.ResNet50(include_top=include_top, weights=weights_dir)
         base_model.trainable = False
         input_size = (224, 224, 3)
 
