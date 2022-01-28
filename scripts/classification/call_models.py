@@ -203,7 +203,7 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False, tra
 
     elif name_model == 'resnet50':
         weights_dir = base_dir_weights + 'resnet50/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
-        base_model = applications.resnet50.ResNet50(include_top=include_top, weights=weights_dir)
+        base_model = applications.resnet50.ResNet50(include_top=include_top, weights='imagenet')
         base_model.trainable = trainable
         input_size = (224, 224, 3)
 
