@@ -4,3 +4,4 @@ analyze_data.py
 run_experiment.py
 __pycache__
 logs/
+classification/weights_pretrained_models/
