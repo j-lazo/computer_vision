@@ -5,3 +5,4 @@ run_experiment.py
 __pycache__
 logs/
 classification/weights_pretrained_models/
+weights_pretrained_models.zip
