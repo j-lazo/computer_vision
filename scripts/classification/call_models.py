@@ -577,6 +577,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                 backbone_model='', eval_val_set=False, eval_train_set=False, analyze_data=False, directory_model='',
                 file_to_predic='', trainable_layers=-1, fine_tune_epochs=1):
 
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
     # Decide how to act according to the mode (train/predict/train-backbone... )
     if mode == 'train' or mode == 'train_backbone':
         # Determine what is the structure of the data directory,
