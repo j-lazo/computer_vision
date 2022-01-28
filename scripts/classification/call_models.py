@@ -179,7 +179,7 @@ def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', b
 
 
 def load_pretrained_model(name_model, weights='imagenet', include_top=False, trainable=False):
-
+    base_dir_weights = ''.join([os.getcwd(), '/scripts/classification/weights_pretrained_models/'])
     """
     Loads a pretrained model given a name
     :param name_model: (str) name of the model
@@ -202,6 +202,7 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False, tra
         input_size = (299, 299, 3)
 
     elif name_model == 'resnet50':
+        weights_dir = base_dir_weights + 'resnet50/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
         base_model = applications.resnet50.ResNet50(include_top=include_top, weights=weights)
         base_model.trainable = trainable
         input_size = (224, 224, 3)
