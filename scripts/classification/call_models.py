@@ -187,43 +187,50 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False, tra
     :return: sequential model with the selected weights
     """
     if name_model == 'vgg16':
-        base_model = applications.vgg16.VGG16(include_top=include_top, weights=weights)
+        weights_dir = base_dir_weights + 'vgg16/vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5'
+        base_model = applications.vgg16.VGG16(include_top=include_top, weights=weights_dir)
         base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'vgg19':
-        base_model = applications.vgg19.VGG19(include_top=include_top, weights=weights)
+        weights_dir = base_dir_weights + 'vgg19/vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5'
+        base_model = applications.vgg19.VGG19(include_top=include_top, weights=weights_dir)
         base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'inception_v3':
-        base_model = applications.inception_v3.InceptionV3(include_top=include_top, weights=weights)
+        weights_dir = base_dir_weights + 'inception_v3/inception_v3_weights_tf_dim_ordering_tf_kernels_notop.h5'
+        base_model = applications.inception_v3.InceptionV3(include_top=include_top, weights=weights_dir)
         base_model.trainable = trainable
         input_size = (299, 299, 3)
 
     elif name_model == 'resnet50':
         weights_dir = base_dir_weights + 'resnet50/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
-        base_model = applications.resnet50.ResNet50(include_top=include_top, weights='imagenet')
+        base_model = applications.resnet50.ResNet50(include_top=include_top, weights=weights_dir)
         base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'resnet101':
-        base_model = applications.resnet.ResNet101(include_top=include_top, weights=weights)
+        weights_dir = base_dir_weights + 'resnet101/resnet101_weights_tf_dim_ordering_tf_kernels_notop.h5'
+        base_model = applications.resnet.ResNet101(include_top=include_top, weights=weights_dir)
         base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'mobilenet':
-        base_model = applications.mobilenet.MobileNet(include_top=include_top, weights=weights)
+        weights_dir = base_dir_weights + 'mobilenet/mobilenet_1_0_224_tf_no_top.h5'
+        base_model = applications.mobilenet.MobileNet(include_top=include_top, weights=weights_dir)
         base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'densenet':
-        base_model = applications.densenet.DenseNet121(include_top=include_top, weights=weights)
+        weights_dir = base_dir_weights + 'densenet/densenet121_weights_tf_dim_ordering_tf_kernels_notop.h5'
+        base_model = applications.densenet.DenseNet121(include_top=include_top, weights=weights_dir)
         base_model.trainable = trainable
         input_size = (224, 224, 3)
 
     elif name_model == 'xception':
-        base_model = applications.xception.Xception(include_top=include_top, weights=weights)
+        weights_dir = base_dir_weights + 'xception/xception_weights_tf_dim_ordering_tf_kernels_notop.h5'
+        base_model = applications.xception.Xception(include_top=include_top, weights=weights_dir)
         base_model.trainable = trainable
         input_size = (299, 299, 3)
 
@@ -576,6 +583,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
                 test_data='', results_dir=os.getcwd() + '/results/', epochs=2, batch_size=4, learning_rate=0.001,
                 backbone_model='', eval_val_set=False, eval_train_set=False, analyze_data=False, directory_model='',
                 file_to_predic='', trainable_layers=-1, fine_tune_epochs=1):
+
 
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
     # Decide how to act according to the mode (train/predict/train-backbone... )
