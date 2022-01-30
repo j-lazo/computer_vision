@@ -1,6 +1,23 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
+from absl import app, flags, logging
+from absl.flags import FLAGS
+
+def create_auxiliar_networks(model, last_conv_layer_name, classifier_layer_names):
+    # First, we create a model that maps the input image to the activations
+    # of the last conv layer
+    last_conv_layer = model.get_layer(last_conv_layer_name)
+    last_conv_layer_model = keras.Model(model.inputs, last_conv_layer.output)
+    # Second, we create a model that maps the activations of the last conv
+    # layer to the final class predictions
+    classifier_input = keras.Input(shape=last_conv_layer.output.shape[1:])
+    x = classifier_input
+    for layer_name in classifier_layer_names:
+        x = model.get_layer(layer_name)(x)
+    classifier_model = keras.Model(classifier_input, x)
+
+    return last_conv_layer_model, classifier_model
 
 
 def make_gradcam_heatmap(img_array, model, last_conv_layer_name, classifier_layer_names):
@@ -50,3 +67,17 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name, classifier_laye
     # For visualization purpose, we will also normalize the heatmap between 0 & 1
     heatmap = np.maximum(heatmap, 0) / np.max(heatmap)
     return heatmap
+
+def analyze_data_gradcam():
+    pass
+
+def main():
+
+
+if __name__ == '__main__':
+    flags.DEFINE_string('name_model', '', 'name of the model')
+    try:
+        app.run(main)
+    except SystemExit:
+        pass
+    pass
