@@ -28,39 +28,6 @@ import data_management as dam
 import data_analysis as daa
 from classification import classification_models as cms
 
-flags.DEFINE_string('name_model', '', 'name of the model')
-flags.DEFINE_string('mode', '', 'train, predict, train_backbone')
-flags.DEFINE_string('backbone', '', 'backbone network')
-flags.DEFINE_string('dataset_dir', os.getcwd() + 'data/', 'path to dataset')
-flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
-flags.DEFINE_string('test_dataset', '', 'path to test dataset')
-flags.DEFINE_string('results_dir', os.getcwd() + 'results/', 'path to dataset')
-flags.DEFINE_integer('epochs', 1, 'number of epochs')
-flags.DEFINE_integer('batch_size', 4, 'batch size')
-flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
-flags.DEFINE_string('weights', '', 'path to weights file')
-flags.DEFINE_bool('analyze_data', False,  'select if analyze data or not')
-flags.DEFINE_string('directory_model', '', 'indicate the path to the directory')
-flags.DEFINE_float('validation_split', 0.2, 'iif not validation dir but needed')
-flags.DEFINE_string('file_to_predic', '', 'Directory or file where to perform predictions if predict mode selected')
-flags.DEFINE_integer('trainable_layers', -1, 'Trainable layers in case backbone is trained')
-
-"""
-flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
-                  'fit: model.fit, '
-                  'eager_fit: model.fit(run_eagerly=True), '
-                  'eager_tf: custom GradientTape')
-flags.DEFINE_enum('transfer', 'none',
-                  ['none', 'darknet', 'no_output', 'frozen', 'fine_tune'],
-                  'none: Training from scratch, '
-                  'darknet: Transfer darknet, '
-                  'no_output: Transfer all but output, '
-                  'frozen: Transfer and freeze all, '
-                  'fine_tune: Transfer all and freeze darknet only')
-flags.DEFINE_integer('size', '', 'image size')
-"""
-
-
 class DataGenerator(tf.keras.utils.Sequence):
     # Generates data for Keras
     def __init__(self, list_IDs, labels, batch_size=32, dim=(64, 64), n_channels=1,
@@ -735,6 +702,39 @@ def main(_argv):
 
 
 if __name__ == '__main__':
+
+    flags.DEFINE_string('name_model', '', 'name of the model')
+    flags.DEFINE_string('mode', '', 'train, predict, train_backbone')
+    flags.DEFINE_string('backbone', '', 'backbone network')
+    flags.DEFINE_string('dataset_dir', os.getcwd() + 'data/', 'path to dataset')
+    flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
+    flags.DEFINE_string('test_dataset', '', 'path to test dataset')
+    flags.DEFINE_string('results_dir', os.getcwd() + 'results/', 'path to dataset')
+    flags.DEFINE_integer('epochs', 1, 'number of epochs')
+    flags.DEFINE_integer('batch_size', 4, 'batch size')
+    flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
+    flags.DEFINE_string('weights', '', 'path to weights file')
+    flags.DEFINE_bool('analyze_data', False, 'select if analyze data or not')
+    flags.DEFINE_string('directory_model', '', 'indicate the path to the directory')
+    flags.DEFINE_float('validation_split', 0.2, 'iif not validation dir but needed')
+    flags.DEFINE_string('file_to_predic', '', 'Directory or file where to perform predictions if predict mode selected')
+    flags.DEFINE_integer('trainable_layers', -1, 'Trainable layers in case backbone is trained')
+
+    """
+    flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf'],
+                      'fit: model.fit, '
+                      'eager_fit: model.fit(run_eagerly=True), '
+                      'eager_tf: custom GradientTape')
+    flags.DEFINE_enum('transfer', 'none',
+                      ['none', 'darknet', 'no_output', 'frozen', 'fine_tune'],
+                      'none: Training from scratch, '
+                      'darknet: Transfer darknet, '
+                      'no_output: Transfer all but output, '
+                      'frozen: Transfer and freeze all, '
+                      'fine_tune: Transfer all and freeze darknet only')
+    flags.DEFINE_integer('size', '', 'image size')
+    """
+
     try:
         app.run(main)
     except SystemExit:
