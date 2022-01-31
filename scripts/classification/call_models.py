@@ -201,6 +201,9 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False, tra
         base_model.trainable = trainable
         input_size = (299, 299, 3)
 
+    else:
+        raise ValueError(f' MODEL: {name_model} not found')
+
     print('PRETRAINED Model')
 
     base_model.summary()
@@ -385,6 +388,8 @@ def load_data(data_dir, annotations_file='', backbone_model='',
         elif backbone_model == 'xception':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.xception.preprocess_input)
             img_width, img_height = 299, 299
+        else:
+            raise ValueError(f' MODEL: {backbone_model} not found')
 
     else:
         pass
