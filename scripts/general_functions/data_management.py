@@ -17,8 +17,6 @@ import keras
 import tensorflow as tf
 #import skimage
 
-rgb_to_hsv = np.vectorize(colorsys.rgb_to_hsv)
-hsv_to_rgb = np.vectorize(colorsys.hsv_to_rgb)
 
 
 def crop_center_square(frame):
@@ -26,7 +24,7 @@ def crop_center_square(frame):
     min_dim = min(y, x)
     start_x = (x // 2) - (min_dim // 2)
     start_y = (y // 2) - (min_dim // 2)
-    return frame[start_y : start_y + min_dim, start_x : start_x + min_dim]
+    return frame[start_y: start_y + min_dim, start_x : start_x + min_dim]
 
 
 def load_video(path, max_frames=0, resize=(255, 255)):
@@ -121,6 +119,9 @@ def shift_hue(arr, hout):
     :param hout:
     :return:
     """
+
+    rgb_to_hsv = np.vectorize(colorsys.rgb_to_hsv)
+    hsv_to_rgb = np.vectorize(colorsys.hsv_to_rgb)
     r, g, b, a = np.rollaxis(arr, axis=-1)
     h, s, v = rgb_to_hsv(r, g, b)
     h = hout
