@@ -14,7 +14,7 @@ def run_experiment(_argv):
     #path_list = base_dir.split(os.sep)
     # data_dir = os.path.join(*path_list[:-1], 'datasets/tissue_classification/')
 
-    dataset = 'tissue_classification'
+    dataset = 'kvasir_image_classification'
     data_dir = ''.join([os.getcwd(), '/datasets/', dataset, '/'])
     test_data = data_dir + 'test/'
     results_dir = data_dir + 'results/'
@@ -49,10 +49,10 @@ if __name__ == '__main__':
     flags.DEFINE_string('backbone', 'resnet50', 'backbone network')
     flags.DEFINE_integer('batch_size', 8, 'batch size')
     flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
-    flags.DEFINE_integer('epochs', 7, 'number of epochs')
+    flags.DEFINE_integer('epochs', 15, 'number of epochs')
     flags.DEFINE_integer('trainable_layers', -7, 'Trainable layers in case backbone is trained')
     flags.DEFINE_bool('analyze_data', True, 'select if analyze data or not')
-    flags.DEFINE_integer('fine_tune_epochs', 3, 'epochs to fine tune the model')
+    flags.DEFINE_integer('fine_tune_epochs', 6, 'epochs to fine tune the model')
 
     flags.DEFINE_string('dataset_dir', os.getcwd() + 'data/', 'path to dataset')
     flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
