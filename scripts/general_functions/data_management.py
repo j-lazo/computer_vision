@@ -617,6 +617,69 @@ def discrepancies(file_1, file_2):
     return list_discrepancies
 
 
+def create_annotations_file_kvasir_classification(directory, file_name='', file_extension='.csv'):
+    """
+    Creates an annotation file according to the structure of the directory tree. The output files could be
+    '.csv' or '.json'. The function only considers up to a maximum of two sub-directories.
+
+    :param directory: (str) path to the directory to analyze
+    :param file_name: (str) name to save the file
+    :param file_extension: (str) .csv or .json
+    :return: a file with the annotations according to the structure of the directory
+    """
+
+    def update_dictionary_kvassir_class(dictionary, image_name, utility='', clearness='', resolution='',
+                                        anatomical_region='', imaging_type='', type_artifact='',
+                                        tissue_type='', fov_shape='', roi=[]):
+
+        """
+        updates a dictionary and its keys, the only mandatory parameter is 'image_name'
+        :param dictionary: (dict)
+        :param image_name: (str)
+        :param utility: (str)
+        :param clearness: (str)
+        :param resolution: (str)
+        :param procedure: (str)
+        :param imaging_type: (str)
+        :param type_artifact: (str)
+        :param tissue_type: (str)
+        :param fov_shape: (str) Field of View Shape
+        :param roi: (list) Region of Interest
+        :return: (dict) dictionary with the update entry
+        """
+        list_upper_gi = ['esophagitis-b-d', 'esophagitis-a', 'barretts-short-segment', 'barretts']
+        list_lower_gi = ['hemorrhoids', 'polyps', 'ulcerative-colitis-grade-0-1', 'ulcerative-colitis-grade-1',
+                         'ulcerative-colitis-grade-1-2', 'ulcerative-colitis-grade-2', 'ulcerative-colitis-grade-2-3',
+                         'ulcerative-colitis-grade-3']
+
+        if tissue_type in list_upper_gi:
+            anatomical_region = 'upper-gi-tract'
+        elif tissue_type in list_lower_gi:
+            anatomical_region = 'lower-gi-tract'
+
+        dictionary.update({image_name: {'useful': utility, 'clear': clearness, 'resolution': resolution,
+                                        'anatomical region': anatomical_region, 'imaging type': imaging_type,
+                                        'type artifact': type_artifact,
+                                        'tissue type': tissue_type, 'fov shape': fov_shape, 'ROI': roi}})
+        return dictionary
+
+    dictionary = {}
+    list_subfolders_with_paths = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
+    print(f'sub folder found: {list_subfolders_with_paths} in {directory}')
+
+    for sub_folder in list_subfolders_with_paths:
+        sub_folder_dir = os.path.join(directory, sub_folder)
+        list_imgs = sorted(os.listdir(sub_folder_dir))
+
+        for i, image_name in enumerate(tqdm.tqdm(list_imgs, desc='Reading images')):
+            tissue_type = sub_folder
+            dictionary = update_dictionary_kvassir_class(dictionary, image_name, tissue_type=tissue_type)
+
+    df = pd.DataFrame(data=dictionary).T
+    name_file = save_data_frame_to_file(df, file_name, file_extension, directory)
+    print(f'data file saved at {name_file}')
+
+
 def update_dictionary(dictionary, image_name, utility='', clearness='', resolution='', procedure='', imaging_type='',
                       type_artifact='', tissue_type='', fov_shape='', roi=[]):
 
@@ -649,7 +712,7 @@ def update_dictionary(dictionary, image_name, utility='', clearness='', resoluti
     return dictionary
 
 
-def create_annotations_file(directory, file_name='', file_extension='.csv'):
+def create_annotations_file_old_data(directory, file_name='', file_extension='.csv'):
     """
     Creates an annotation file according to the structure of the directory tree. The output files could be
     '.csv' or '.json'. The function only considers up to a maximum of two sub-directories.
@@ -1030,7 +1093,7 @@ def arrange_dataset(directory_path):
         df.to_csv(directory_path + case + '/' + new_csv_file_name)
 
 
-def merge_annotations_data(annotations_list, selected_elements=[]):
+def merge_annotations_data(annotations_list, selected_elements=[], output_dir=''):
 
     data_frames = [[] for _ in range(len(annotations_list))]
 
@@ -1038,7 +1101,8 @@ def merge_annotations_data(annotations_list, selected_elements=[]):
         data_frames[i] = pd.read_csv(file).set_index('image_name')
 
     df = pd.concat(data_frames)
-    df.pop("Unnamed: 0")
+    print(df)
+    #df.pop("Unnamed: 0")
 
     list_index = df.index.values.tolist()
     for name in list_index:
@@ -1058,8 +1122,11 @@ def merge_annotations_data(annotations_list, selected_elements=[]):
                 print(element, 'not found')
 
     print(df)
-    df.to_csv('test.csv')
-    return 0
+    if output_dir != '':
+        save_dir = output_dir + '/all_annotations.csv'
+    else:
+        save_dir = os.getcwd() + '/all_annotations.csv'
+    df.to_csv(save_dir)
 
 
 if __name__ == "__main__":

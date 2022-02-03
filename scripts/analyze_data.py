@@ -15,7 +15,16 @@ flags.DEFINE_string('path_dir', '', 'path to directory')
 def run_experiment(_argv):
 
     if FLAGS.path_dir:
-        pass
+        path_dir = FLAGS.path_dir
+        list_subdirs = os.listdir(path_dir)
+        list_csv_fiels = list()
+        for sub_dir in list_subdirs:
+            csv_name = [f for f in os.listdir(os.path.join(path_dir, sub_dir)) if f.endswith('.csv')].pop()
+            dir_csv_files = ''.join([path_dir, sub_dir, '/', csv_name])
+            list_csv_fiels.append(dir_csv_files)
+
+        print(list_csv_fiels)
+        dam.merge_annotations_data(list_csv_fiels)
 
 if __name__ == '__main__':
     try:
