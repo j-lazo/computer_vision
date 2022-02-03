@@ -347,8 +347,10 @@ def generate_training_and_validation_classification_sets(input_directory, output
     def _check_folder_exists(directory_path, sub_folders):
         if not os.path.isdir(directory_path):
             os.mkdir(directory_path)
-            for folder in sub_folders:
-                os.mkdir(''.join([directory_path, '/', folder]))
+        for folder in sub_folders:
+            directory_sub_dir = ''.join([directory_path, '/', folder])
+            if not os.path.isdir(directory_sub_dir):
+               os.mkdir(directory_sub_dir)
 
     def _copy_imgs(input_directory, list_destination_folders, unique_cases=[], case_probabilities=0.5):
 
