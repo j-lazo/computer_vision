@@ -152,7 +152,7 @@ def analyze_video_dataset(dir_dataset):
     :param dir_dataset: (str) directory of the dataset
     :return:
     """
-    list_video_files  = get_video_files_in_dir(dir_dataset)
+    list_video_files = get_video_files_in_dir(dir_dataset)
     print(f"found {len(list_video_files)} video files")
     num_frames = []
     name_videos = []
