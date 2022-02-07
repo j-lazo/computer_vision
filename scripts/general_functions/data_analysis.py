@@ -25,7 +25,8 @@ import shutil
 import random
 from sklearn.metrics import roc_curve
 from sklearn.metrics import auc
-
+from sklearn.metrics import confusion_matrix
+#from pandas_ml import ConfusionMatrix
 
 def convert_categorical_str_to_numerical(category_list):
     """
@@ -696,6 +697,37 @@ def extract_information_from_name(string_name):
 
     return lr, bs, model_name, date_experiment
 
+
+def compute_confusion_matrix(gt_data, predicted_data, plot_figure=False, dir_save_fig=''):
+    conf_matrix = confusion_matrix(gt_data, predicted_data)
+
+    if plot_figure is True:
+
+        uniques = np.unique(gt_data)
+        group_percentages = [value for value in conf_matrix.flatten() / np.sum(conf_matrix)]
+
+        size = len(list(uniques))
+        list_uniques = list(uniques)
+        short_list = list()
+        for name in list_uniques:
+            name_split = name.split('-')
+            new_name = ''
+            for splits in name_split:
+                new_name = new_name.join([splits[0]])
+
+            short_list.append(new_name)
+
+        labels = np.asarray(group_percentages).reshape(size, size)
+        sns.heatmap(conf_matrix, cmap='Blues', cbar=False, linewidths=.5,
+                    yticklabels=list(uniques), xticklabels=list(short_list), annot=labels)
+        plt.xlabel('True positives')
+        if dir_save_fig != '':
+            plt.savefig(dir_save_fig + '/confusion_matrix.png')
+
+        plt.close()
+        #plt.show()
+
+    return conf_matrix
 
 def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_results_test_0'], dir_save_results='',
                         exclude=[], top_results=1.0):
