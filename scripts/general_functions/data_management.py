@@ -455,13 +455,13 @@ def generate_training_and_validation_segmenation_sets(input_directory, output_di
     training_dir = output_directory + 'train/'
     validation_dir = output_directory + 'val/'
 
-    check_folder_exists(training_dir, create_folder=True)
-    check_folder_exists(validation_dir, create_folder=True)
+    check_folder_exists(training_dir, create_dir=True)
+    check_folder_exists(validation_dir, create_dir=True)
     list_destination_folders = [training_dir, validation_dir]
 
     if test_dataset is True:
         test_dir = output_directory + 'test/'
-        check_folder_exists(test_dir, create_folder=True)
+        check_folder_exists(test_dir, create_dir=True)
         list_destination_folders.append(test_dir)
 
     def _copy_imgs(input_directory, list_destination_folders, training_percentage):
