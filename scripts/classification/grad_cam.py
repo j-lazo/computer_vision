@@ -8,11 +8,12 @@ from classification import grad_cam as gc
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import datetime
-
+import tqdm
 
 from absl import app, flags, logging
 from absl.flags import FLAGS
 from general_functions import data_management as dam
+
 
 def get_img_array(img_path, size):
 
@@ -124,10 +125,24 @@ def make_gradcam_heatmap(img_array, last_conv_layer_model, classifier_model):
     return heatmap
 
 
-def analyze_data_gradcam(name_model, output_dir='', plot=False):
+def analyze_data_gradcam(name_model, dataset_dir, dataset_to_analyze, output_dir='', plot=False):
 
+    if output_dir == '':
+        output_dir = ''.join([dataset_dir, 'results/', name_model,
+                              '/gradcam_predictions/'])
 
-    directory_model = ''.join([os.getcwd(), '/datasets/tissue_classification/results/', name_model,
+        heat_maps_dir = output_dir + 'heatmaps/'
+        binary_masks_dir = output_dir + 'predicted_masks/'
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
+
+        if not os.path.isdir(heat_maps_dir):
+            os.mkdir(heat_maps_dir)
+
+        if not os.path.isdir(binary_masks_dir):
+            os.mkdir(binary_masks_dir)
+
+    directory_model = ''.join([dataset_dir, 'results/', name_model,
                                '/model_', name_model])
     model, _ = img_class.load_model(directory_model)
     backbone_model = model.get_layer(index=0)
@@ -161,21 +176,21 @@ def analyze_data_gradcam(name_model, output_dir='', plot=False):
                                                         cap_network=classifier_cap)
 
     # load the data
-    data_dir = ''.join([os.getcwd(), '/datasets/tissue_classification/test/'])
-    test_dataset = os.listdir(data_dir)
-    test_dataset.remove('annotations_test.csv')
-    list_imgs = []
+    test_dataset = os.listdir(dataset_to_analyze)
+    test_dataset = [f for f in test_dataset if os.path.isdir(os.path.join(dataset_to_analyze, f))]
+    list_imgs = list()
 
     for folder in test_dataset:
-        dir_folder = ''.join([data_dir, folder, '/'])
+        dir_folder = ''.join([dataset_to_analyze, folder, '/'])
         imgs_subdir = [dir_folder + f for f in os.listdir(dir_folder) if f.endswith('.png')]
         list_imgs = list_imgs + imgs_subdir
 
-    for j in range(25):
-        img_path = random.choice(list_imgs)
+    for i, img_path in enumerate(tqdm.tqdm(list_imgs, desc=f'Making mask predictions, {len(list_imgs)} images')):
+        # if you want to pick random paths uncoment bewlloa and comment the previous one to have a counter
+        #img_path = random.choice(list_imgs)
         preprocess_input, img_size = gc.load_preprocess_input(backbone_model.name)
         img_array = preprocess_input(gc.get_img_array(img_path, size=img_size))
-
+        img_name = os.path.split(img_path)[-1]
         img = tf.keras.preprocessing.image.load_img(img_path)
         img = tf.keras.preprocessing.image.img_to_array(img)
 
@@ -217,6 +232,15 @@ def analyze_data_gradcam(name_model, output_dir='', plot=False):
         superimposed_img = jet_heatmap * 0.4 + img
         superimposed_img = tf.keras.preprocessing.image.array_to_img(superimposed_img)
 
+        w, d = np.shape(mask_heatmap)
+        binary_mask = np.zeros((w, d, 3))
+        binary_mask[:, :, 0] = mask_heatmap * 255
+        binary_mask[:, :, 1] = mask_heatmap * 255
+        binary_mask[:, :, 2] = mask_heatmap * 255
+
+        cv2.imwrite(binary_masks_dir + img_name, binary_mask)
+        superimposed_img.save(heat_maps_dir + img_name)
+
         if plot is True:
             plt.figure()
             plt.subplot(131)
@@ -226,6 +250,7 @@ def analyze_data_gradcam(name_model, output_dir='', plot=False):
             plt.subplot(133)
             plt.imshow(mask_heatmap)
             plt.show()
+
 
 
 
