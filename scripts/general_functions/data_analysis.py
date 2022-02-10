@@ -269,6 +269,7 @@ def compare_box_plots(general_directory = '', name_test_csv_file='', name_valida
     acc_values = {}
     if general_directory != '' and type(general_directory) == str:
         csv_files = sorted([f for f in os.listdir(general_directory) if 'evaluation_results' in f and f.endswith('.csv')])
+        print(csv_files)
         count_id = 0
         for i, folder in enumerate(prediction_folders):
             if folder in csv_files[i]:
@@ -317,7 +318,7 @@ def compare_box_plots(general_directory = '', name_test_csv_file='', name_valida
     ax1.set_ylim([0, 1.0])
     ax4.title.set_text('$ACC$')
 
-    #plt.show()
+    plt.show()
     if save_directory == '':
         save_directory = general_directory
 
