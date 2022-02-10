@@ -5,11 +5,24 @@ from general_functions import data_management as dam
 from matplotlib import pyplot as plt
 import cv2
 from classification import call_models as img_class
+from segmentation import call_models as segm
 
 DATASETS = ['tissue_classification']
 
 
 def run_experiment(_argv):
+    project_folder = '/media/benoit/DATA/Jorge/temp_delete/dataset-20220209T103810Z-001/new_dataset/'
+    name_models = ['Transpose_ResUnet']
+    # Hyper-parameters:
+    batches = [4]
+    learing_rates = [1e-3]
+    for name_model in name_models:
+        for batch in batches:
+            for lr in learing_rates:
+                segm.call_model('train', project_folder, name_model, batch=batch, lr=lr)
+
+
+def run_experiment_classification(_argv):
     #base_dir = os.path.normpath(os.getcwd())
     #path_list = base_dir.split(os.sep)
     # data_dir = os.path.join(*path_list[:-1], 'datasets/tissue_classification/')
