@@ -27,7 +27,13 @@ def get_img_array(img_path, size):
 
 
 def load_preprocess_input(backbone_model):
+    """
 
+    :param backbone_model:
+    :type backbone_model:
+    :return:
+    :rtype:
+    """
     if backbone_model == 'vgg16':
         preprocessing_function = tf.keras.applications.vgg16.preprocess_input
         size = (224, 224)
@@ -66,7 +72,19 @@ def load_preprocess_input(backbone_model):
 
 
 def create_auxiliar_networks(model, last_conv_layer_name, classifier_layer_names, cap_network=[]):
+    """
 
+    :param model:
+    :type model:
+    :param last_conv_layer_name:
+    :type last_conv_layer_name:
+    :param classifier_layer_names:
+    :type classifier_layer_names:
+    :param cap_network:
+    :type cap_network:
+    :return:
+    :rtype:
+    """
     # First, we create a model that maps the input image to the activations
     # of the last conv layer
     last_conv_layer = model.get_layer(last_conv_layer_name)
@@ -89,7 +107,16 @@ def create_auxiliar_networks(model, last_conv_layer_name, classifier_layer_names
 
 
 def make_gradcam_heatmap(img_array, last_conv_layer_model, classifier_model):
-
+    """
+    :param img_array:
+    :type img_array:
+    :param last_conv_layer_model:
+    :type last_conv_layer_model:
+    :param classifier_model:
+    :type classifier_model:
+    :return:
+    :rtype:
+    """
     # Then, we compute the gradient of the top predicted class for our input image
     # with respect to the activations of the last conv layer
     with tf.GradientTape() as tape:
