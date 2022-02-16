@@ -1151,6 +1151,42 @@ def arrange_dataset(directory_path):
         df.to_csv(directory_path + case + '/' + new_csv_file_name)
 
 
+def build_csv_from_other_csv(directory_files, csv_dir, output_csv_file_dir=''):
+
+    list_files = sorted(os.listdir(directory_files))
+    data_frame = pd.read_csv(csv_dir)
+    list_names_imgs = data_frame['image_name'].tolist()
+    headers = list(data_frame.columns)
+    new_df = pd.DataFrame(columns=headers)
+    sub_folders = [f for f in list_files if os.path.isdir(directory_files + f)]
+    if sub_folders:
+        list_imgs = list()
+        for sub_folder in sub_folders:
+            list_imgs += [f for f in os.listdir(''.join([directory_files, sub_folder, '/'])) if f.endswith('.png')]
+
+        i = 0
+        for image in list_imgs:
+            if image in list_names_imgs:
+                index = list_names_imgs.index(image)
+                new_df.loc[data_frame.index[i]] = data_frame.iloc[index]
+                i += 1
+
+
+    else:
+        i = 0
+        for image in list_files:
+            if image in list_names_imgs:
+                index = list_names_imgs.index(image)
+                new_df.loc[data_frame.index[i]] = data_frame.iloc[index]
+                i += 1
+
+    print(new_df)
+    if output_csv_file_dir == '':
+        output_csv_file_dir = ''.join([directory_files, 'annotations.csv'])
+
+    new_df.to_csv(output_csv_file_dir)
+
+
 def merge_annotations_data(annotations_list, selected_elements=[], output_dir=''):
 
     data_frames = [[] for _ in range(len(annotations_list))]
@@ -1160,7 +1196,6 @@ def merge_annotations_data(annotations_list, selected_elements=[], output_dir=''
 
     df = pd.concat(data_frames)
     print(df)
-    #df.pop("Unnamed: 0")
 
     list_index = df.index.values.tolist()
     for name in list_index:
