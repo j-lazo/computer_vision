@@ -617,6 +617,62 @@ def discrepancies(file_1, file_2):
     return list_discrepancies
 
 
+def create_annotations_file_tissue_classification(directory, file_name='', file_extension='.csv'):
+    """
+    Creates an annotation file according to the structure of the directory tree. The output files could be
+    '.csv' or '.json'. The function only considers up to a maximum of two sub-directories.
+
+    :param directory: (str) path to the directory to analyze
+    :param file_name: (str) name to save the file
+    :param file_extension: (str) .csv or .json
+    :return: a file with the annotations according to the structure of the directory
+    """
+
+    def update_dictionary_class(dictionary, image_name, utility='', clearness='', resolution='',
+                                        anatomical_region='', imaging_type='', type_artifact='',
+                                        tissue_type='', fov_shape='', roi=[]):
+
+        """
+        updates a dictionary and its keys, the only mandatory parameter is 'image_name'
+        :param dictionary: (dict)
+        :param image_name: (str)
+        :param utility: (str)
+        :param clearness: (str)
+        :param resolution: (str)
+        :param procedure: (str)
+        :param imaging_type: (str)
+        :param type_artifact: (str)
+        :param tissue_type: (str)
+        :param fov_shape: (str) Field of View Shape
+        :param roi: (list) Region of Interest
+        :return: (dict) dictionary with the update entry
+        """
+
+        anatomical_region = 'bladder'
+
+        dictionary.update({image_name: {'useful': utility, 'clear': clearness, 'resolution': resolution,
+                                        'anatomical region': anatomical_region, 'imaging type': imaging_type,
+                                        'type artifact': type_artifact,
+                                        'tissue type': tissue_type, 'fov shape': fov_shape, 'ROI': roi}})
+        return dictionary
+
+    dictionary = {}
+    list_subfolders_with_paths = [f for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
+    print(f'sub folder found: {list_subfolders_with_paths} in {directory}')
+
+    for sub_folder in list_subfolders_with_paths:
+        sub_folder_dir = os.path.join(directory, sub_folder)
+        list_imgs = sorted(os.listdir(sub_folder_dir))
+
+        for i, image_name in enumerate(tqdm.tqdm(list_imgs, desc='Reading images')):
+            tissue_type = sub_folder
+            dictionary = update_dictionary_class(dictionary, image_name, tissue_type=tissue_type)
+
+    df = pd.DataFrame(data=dictionary).T
+    name_file = save_data_frame_to_file(df, file_name, file_extension, directory)
+    print(f'data file saved at {name_file}')
+
+
 def create_annotations_file_kvasir_classification(directory, file_name='', file_extension='.csv'):
     """
     Creates an annotation file according to the structure of the directory tree. The output files could be
@@ -710,6 +766,8 @@ def update_dictionary(dictionary, image_name, utility='', clearness='', resoluti
                                     'procedure': procedure, 'imaging type': imaging_type, 'type artifact': type_artifact,
                                     'tissue type': tissue_type, 'fov shape': fov_shape, 'ROI': roi}})
     return dictionary
+
+
 
 
 def create_annotations_file_old_data(directory, file_name='', file_extension='.csv'):
