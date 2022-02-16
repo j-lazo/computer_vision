@@ -59,7 +59,9 @@ def click_and_crop(event, x, y, flag, image):
 
 def extract_frames_video(video_path, save_dir='', target_size=(350, 350)):
 
-
+    if not(os.path.isfile(video_path)):
+        raise f'Video path:{video_path} not found'
+    
     name_video = os.path.split(video_path)[-1]
     file_extension = name_video.split('.')[-1]
     case_id = name_video.replace('.' + file_extension, '')
