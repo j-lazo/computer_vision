@@ -28,7 +28,6 @@ def explore_dataset(dataset_dir, annotations_dir=''):
             index = list_names_imgs.index(image)
             print(f'{i}/{len(list_imgs)}', data_frame.at[index, 'image_name'], data_frame.at[index, 'imaging type'])
             img_dir = dataset_dir + image
-            print(img_dir)
             img = cv2.imread(img_dir)
             while True:
                 key = cv2.waitKey(1) & 0xFF
