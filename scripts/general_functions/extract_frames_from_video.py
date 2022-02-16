@@ -1,3 +1,4 @@
+import copy
 import os
 import cv2
 from absl import app, flags, logging
@@ -136,7 +137,11 @@ def extract_frames_video(video_path, save_dir='', target_size=(350, 350)):
             else:
                 cv2.resizeWindow(name_window, 600, 600)
 
-            cv2.imshow(name_window, img)
+            selected_frame = copy.copy(img)
+            if coords:
+                cv2.rectangle(selected_frame, coords[0], coords[1], (255, 0, 0), 2)
+
+            cv2.imshow(name_window, selected_frame)
             cv2.setMouseCallback(name_window, click_and_crop, img)
             new_key = cv2.waitKey(0) & 0xFF
 
