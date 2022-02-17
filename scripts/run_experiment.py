@@ -38,13 +38,13 @@ def grad_cam_experiment(_argv):
     # dataset_to_analyze = dataset_dir + 'test/'
     name_model = FLAGS.name_model
     dataset_dir = FLAGS.dataset_dir
+    dataset_to_analyze = FLAGS.test_dataset
 
     if dataset_dir in DATASETS:
         dataset_directory = ''.join([os.getcwd(), '/datasets/', dataset_dir, '/'])
     else:
         dataset_directory = dataset_dir
 
-    dataset_to_analyze = os.getcwd() + '/datasets/bladder_tissue_classification/test/test_segmentation/'
     gc.analyze_data_gradcam(name_model, dataset_directory, dataset_to_analyze, plot=False)
 
 
