@@ -73,7 +73,7 @@ def run_experiment_classification(_argv):
     dataset_dir = FLAGS.dataset_dir
 
     if dataset_dir in DATASETS:
-        data_dir = ''.join([os.getcwd(), '/datasets/', dataset, '/'])
+        data_dir = ''.join([os.getcwd(), '/datasets/', dataset_dir, '/'])
         test_data = data_dir + 'test/'
         results_dir = data_dir + 'results/'
     else:
