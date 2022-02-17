@@ -695,40 +695,186 @@ def extract_information_from_name(string_name):
     lr = re.search('lr_(.+?)_', string_name).group(1)
     bs = re.search('bs_(.+?)_', string_name).group(1)
 
-
     return lr, bs, model_name, date_experiment
 
 
+def plot_training_history(list_csv_files, save_dir=''):
+    """
+    Plots the training history of a model given the list of csv files (in case that there are different training stages)
+
+
+    Parameters
+    ----------
+    list_csv_files (list): list of the csv files with the training history
+    save_dir (str): The directory where to save the file, if empty, the current working directory
+
+    Returns
+    -------
+
+    """
+    if len(list_csv_files) > 1:
+        fine_tune_history = pd.read_csv(list_csv_files[0])
+        fine_tune_lim = fine_tune_history['epoch'].tolist()[-1]
+        header_1 = fine_tune_history.columns.values.tolist()
+        train_history = pd.read_csv(list_csv_files[-1])
+        header_2 = train_history.columns.values.tolist()
+        # mix the headers in case they are different among files
+        dictionary = {header_2[i]:name for i, name in enumerate(header_1)}
+        train_history.rename(columns=dictionary, inplace=True)
+        # append the dataframes in a single one
+        train_history = fine_tune_history.append(train_history, ignore_index=True)
+
+    else:
+        train_history = pd.read_csv(list_csv_files[0])
+
+    fig = plt.figure(1, figsize=(12, 9))
+
+    ax1 = fig.add_subplot(221)
+    ax1.title.set_text('$ACC$')
+    ax1.plot(train_history['accuracy'].tolist(), label='train')
+    ax1.plot(train_history['val_accuracy'].tolist(), label='val')
+    ax1.fill_between((0, fine_tune_lim), 0, 1, facecolor='orange', alpha=0.4)
+
+    plt.legend(loc='best')
+
+    ax2 = fig.add_subplot(222)
+    ax2.title.set_text('PREC')
+    ax2.plot(train_history['precision'].tolist(), label='train')
+    ax2.plot(train_history['val_precision'].tolist(), label='val')
+    ax2.fill_between((0, fine_tune_lim), 0, 1, facecolor='orange', alpha=0.4)
+    plt.legend(loc='best')
+
+    ax3 = fig.add_subplot(223)
+    ax3.title.set_text('$LOSS$')
+    ax3.plot(train_history['loss'].tolist(), label='train')
+    ax3.plot(train_history['val_loss'].tolist(), label='val')
+    max_xval = np.amax([train_history['loss'].tolist(), train_history['val_loss'].tolist()])
+    ax3.fill_between((0, fine_tune_lim), 0, max_xval, facecolor='orange', alpha=0.4)
+    plt.legend(loc='best')
+
+    ax4 = fig.add_subplot(224)
+    ax4.title.set_text('$REC$')
+    ax4.plot(train_history['recall'].tolist(), label='train')
+    ax4.plot(train_history['val_recall'].tolist(), label='val')
+    ax4.fill_between((0, fine_tune_lim), 0, 1, facecolor='orange', alpha=0.4)
+    plt.legend(loc='best')
+
+    if save_dir == '':
+        dir_save_figure = os.getcwd() + '/training_history.png'
+    else:
+        dir_save_figure = save_dir + 'training_history.png'
+
+    print(f'figure saved at: {dir_save_figure}')
+    plt.savefig(dir_save_figure)
+    plt.close()
+
+
 def compute_confusion_matrix(gt_data, predicted_data, plot_figure=False, dir_save_fig=''):
+    """
+    Compute the confusion Matrix given the ground-truth data (gt_data) and predicted data (predicted_data)
+    in list format. If Plot is True shows the matrix .
+    Parameters
+    ----------
+    gt_data : list
+    predicted_data : list
+    plot_figure :
+    dir_save_fig :
+
+    Returns
+    -------
+
+    """
+    uniques = np.unique(gt_data)
+    ocurrences = [gt_data.count(unique) for unique in uniques]
+    group_percentages = list()
     conf_matrix = confusion_matrix(gt_data, predicted_data)
+    group_percentages = [conf_matrix[i]/ocurrences[i] for i, row in enumerate(conf_matrix)]
 
     if plot_figure is True:
 
-        uniques = np.unique(gt_data)
-        group_percentages = [value for value in conf_matrix.flatten() / np.sum(conf_matrix)]
-
         size = len(list(uniques))
         list_uniques = list(uniques)
-        short_list = list()
+        xlabel_names = list()
         for name in list_uniques:
-            name_split = name.split('-')
-            new_name = ''
-            for splits in name_split:
-                new_name = new_name.join([splits[0]])
+            # if the name of the unique names is longer than 4 characters will split it
+            if len(name) > 4:
+                name_split = name.split('-')
+                new_name = ''
+                for splits in name_split:
+                    new_name = new_name.join([splits[0]])
 
-            short_list.append(new_name)
+                xlabel_names.append(new_name)
+            else:
+                xlabel_names.append(name)
 
         labels = np.asarray(group_percentages).reshape(size, size)
-        sns.heatmap(conf_matrix, cmap='Blues', cbar=False, linewidths=.5,
-                    yticklabels=list(uniques), xticklabels=list(short_list), annot=labels)
-        plt.xlabel('True positives')
-        if dir_save_fig != '':
-            plt.savefig(dir_save_fig + '/confusion_matrix.png')
+        sns.heatmap(group_percentages, cmap='Blues', cbar=False, linewidths=.5,
+                    yticklabels=list(uniques), xticklabels=list(xlabel_names), annot=labels)
+        plt.xlabel('Predicted Class')
+        plt.ylabel('Real Class')
+
+
+        if dir_save_fig == '':
+            dir_save_figure = os.getcwd() + '/confusion_matrix.png'
+        else:
+            dir_save_figure = dir_save_fig + 'confusion_matrix.png'
+
+        print(f'figure saved at: {dir_save_figure}')
+        plt.savefig(dir_save_figure)
 
         plt.close()
         #plt.show()
 
     return conf_matrix
+
+
+def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figure=False, dir_save_fig=''):
+    """
+    Analyze the results of a multi-class classification experiment
+
+    Parameters
+    ----------
+    gt_data_file :
+    predictions_data_dir :
+    plot_figure :
+    dir_save_fig :
+
+    Returns
+    -------
+    History plot, Confusion Matrix
+
+    """
+    list_prediction_files = [f for f in os.listdir(predictions_data_dir) if 'predictions' in f and '(_pre' not in f]
+    list_history_files = [f for f in os.listdir(predictions_data_dir) if 'train_history' in f]
+    ordered_history = list()
+    fine_tune_file = predictions_data_dir + [f for f in list_history_files if 'fine_tune' in f].pop()
+    if fine_tune_file:
+        ordered_history.append(fine_tune_file)
+
+    ordered_history.append(predictions_data_dir + list_history_files[-1])
+
+    file_predictiosn = list_prediction_files.pop()
+    path_file_predictions = predictions_data_dir + file_predictiosn
+    print(f'file predictions: {file_predictiosn}')
+
+    df_ground_truth = pd.read_csv(gt_data_file)
+    df_preditc_data = pd.read_csv(path_file_predictions)
+
+    predictions_names = df_preditc_data['fname'].tolist()
+    predictions_vals = df_preditc_data['over all'].tolist()
+
+    gt_names = df_ground_truth['image_name'].tolist()
+    gt_vals = df_ground_truth['tissue type'].tolist()
+
+    ordered_predictiosn = list()
+    for name in gt_names:
+        if name in predictions_names:
+            index = predictions_names.index(name)
+            ordered_predictiosn.append(predictions_vals[index])
+
+    plot_training_history(ordered_history, save_dir=predictions_data_dir)
+    compute_confusion_matrix(gt_vals, ordered_predictiosn, plot_figure=True, dir_save_fig=predictions_data_dir)
+
 
 def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_results_test_0'], dir_save_results='',
                         exclude=[], top_results=1.0):
@@ -773,10 +919,10 @@ def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_
     # save x.x% top results in a list
     top_list = zipped_results[:int(top_results*len(zipped_results))]
 
-    dsc_values = {pair[1]:dsc_values[pair[1]] for pair in top_list if pair[1] in dsc_values}
-    prec_values = {pair[1]:prec_values[pair[1]] for pair in top_list if pair[1] in prec_values}
-    rec_values = {pair[1]:rec_values[pair[1]] for pair in top_list if pair[1] in rec_values}
-    acc_values = {pair[1]:acc_values[pair[1]] for pair in top_list if pair[1] in acc_values}
+    dsc_values = {pair[1]: dsc_values[pair[1]] for pair in top_list if pair[1] in dsc_values}
+    prec_values = {pair[1]: prec_values[pair[1]] for pair in top_list if pair[1] in prec_values}
+    rec_values = {pair[1]: rec_values[pair[1]] for pair in top_list if pair[1] in rec_values}
+    acc_values = {pair[1]: acc_values[pair[1]] for pair in top_list if pair[1] in acc_values}
 
     print_names = [f'{extract_information_from_name(file_name)[2]} bs:{extract_information_from_name(file_name)[0]} ' \
                    f'lr:{extract_information_from_name(file_name)[1]} DSC: {score:.2f}' for score, file_name in top_list]
