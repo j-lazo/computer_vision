@@ -1156,7 +1156,7 @@ def build_csv_from_other_csv(directory_files, csv_dir, output_csv_file_dir=''):
     Given a directory path (directory_files), and a csv file (csv_dir) that contains the names of the files
     in the directory and more, builds another csv file with only the information of the files existing in
     directory_files
-    
+
     Args:
         directory_files (str): directory of the files
         csv_dir (str): csv from where to copy the files
