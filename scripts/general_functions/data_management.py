@@ -1182,9 +1182,10 @@ def build_csv_from_other_csv(directory_files, csv_dir, output_csv_file_dir=''):
 
     print(new_df)
     if output_csv_file_dir == '':
-        output_csv_file_dir = ''.join([directory_files, 'annotations.csv'])
+        case_name = directory_files.split('/')[-2]
+        output_csv_file_dir = ''.join([directory_files, 'annotations_', case_name, '.csv'])
 
-    new_df.to_csv(output_csv_file_dir)
+    new_df.to_csv(output_csv_file_dir, index=False)
 
 
 def merge_annotations_data(annotations_list, selected_elements=[], output_dir=''):
