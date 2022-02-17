@@ -7,3 +7,4 @@ logs/
 classification/weights_pretrained_models/
 weights_pretrained_models.zip
 *.sh
+*.h5
