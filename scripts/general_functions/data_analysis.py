@@ -113,7 +113,7 @@ def check_file_isvid(filename):
     :param filename: (str) name of the file
     :return: (bool)
     """
-    list_extensions = ['.mpg', '.mp4', '.MP4']
+    list_extensions = ['.mpg', '.MPG', '.mp4', '.MP4', '.AVI', '.avi']
     if filename[-4:] in list_extensions:
         return True
     else:
