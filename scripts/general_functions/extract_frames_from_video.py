@@ -58,7 +58,26 @@ def click_and_crop(event, x, y, flag, image):
 
 
 def extract_frames_video(video_path, save_dir='', target_size=(350, 350)):
+    """
+    Given a video can extract selected frames. To advance press (->) right arrow,
+    to return to the previous frame, (<-) left arrow. If you want to extract the current
+    frame from the video press (s). Then select the ROI with he mouse (green square).
+    It then will show the cropped image in an extra window. Press q to close the window.
+    If you want to save the cropped image press (s) otherwise press any other key.
+    You can keep drawing the ROI untill you have the ROI you want.
+    Once you select the ROI for the first time it will show it as default in the
+    following selected frames but you still can change it.
 
+    Parameters
+    ----------
+    video_path : (str)
+    save_dir : (str)
+    target_size : (tuple)
+
+    Returns
+    -------
+
+    """
     if not(os.path.isfile(video_path)):
         raise f'Video path:{video_path} not found'
 
