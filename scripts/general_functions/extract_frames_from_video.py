@@ -99,7 +99,6 @@ def extract_frames_video(video_path, save_dir='', target_size=(350, 350)):
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     cv2.namedWindow(name_video, 0)
-    print(width)
     if width > 750:
         cv2.resizeWindow(name_video, int(width/3), int(height/3))
     else:
