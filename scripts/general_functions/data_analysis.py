@@ -818,6 +818,7 @@ def analyze_dataset_distribution(dataset_dir, plot_figure=False, dir_save_fig=''
     plt.ylabel('Cases')
     plt.show()
 
+
 def compute_confusion_matrix(gt_data, predicted_data, plot_figure=False, dir_save_fig=''):
     """
     Compute the confusion Matrix given the ground-truth data (gt_data) and predicted data (predicted_data)
