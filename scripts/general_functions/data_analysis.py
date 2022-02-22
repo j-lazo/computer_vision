@@ -26,7 +26,10 @@ import random
 from sklearn.metrics import roc_curve
 from sklearn.metrics import auc
 from sklearn.metrics import confusion_matrix
+import copy
 #from pandas_ml import ConfusionMatrix
+
+os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
 
 def convert_categorical_str_to_numerical(category_list):
     """
@@ -768,6 +771,52 @@ def plot_training_history(list_csv_files, save_dir=''):
     plt.savefig(dir_save_figure)
     plt.close()
 
+
+def analyze_dataset_distribution(dataset_dir, plot_figure=False, dir_save_fig=''):
+    list_cases = sorted([f for f in os.listdir(dataset_dir) if os.path.isdir(dataset_dir + f)])
+    cases_ocurence = {'CIS WLI': 0, 'CIS NBI': 0, 'HGC WLI': 0, 'HGC NBI': 0, 'HLT WLI': 0, 'HLT NBI': 0,
+                      'LGC WLI': 0, 'LGC NBI': 0, 'NTL WLI': 0, 'NTL NBI': 0}
+    class_cases_dict = {case: copy.copy(cases_ocurence) for case in list_cases}
+    unique_combinations = list()
+    total_imgs = list()
+    for case in list_cases[:]:
+
+        combinations = list()
+        csv_file = [f for f in os.listdir(dataset_dir + case) if f.endswith('.csv')].pop()
+        csv_file_dir = os.path.join(dataset_dir, case, csv_file)
+        df = pd.read_csv(csv_file_dir)
+        list_tissue_types = df['tissue type'].tolist()
+        list_imaging_type = df['imaging type'].tolist()
+        # obtain all the unique combinations in the different cases
+
+        for i, tissue in enumerate(list_tissue_types):
+            combination = ''.join([tissue, ' ', list_imaging_type[i]])
+            combinations.append(combination)
+            if combination not in unique_combinations:
+                unique_combinations.append(combination)
+
+        total_imgs.append(len(combinations))
+        for combination in np.unique(combinations):
+            class_cases_dict[case][combination] = combinations.count(combination)
+
+    # create an empty array
+    plot_array = np.zeros([len(list_cases), len(unique_combinations)])
+    normalized_array = copy.copy(plot_array)
+    # Now lets fill the array that corresponds to the ocurrence of each class for each patient case
+    for i, case in enumerate(list_cases[:]):
+        for j, key in enumerate(class_cases_dict[case].keys()):
+            plot_array[i][j] = class_cases_dict[case][key]
+            normalized_array[i][j] = class_cases_dict[case][key]/total_imgs[i]
+            xticklabels = list(class_cases_dict[case].keys())
+
+    plt.figure()
+    labels = np.asarray(plot_array).reshape(len(list_cases), len(unique_combinations))
+    sns.heatmap(normalized_array, cmap='YlOrBr', cbar=False, linewidths=.5,
+                yticklabels=list_cases, xticklabels=xticklabels, annot=labels)
+
+    plt.xlabel('Classes')
+    plt.ylabel('Cases')
+    plt.show()
 
 def compute_confusion_matrix(gt_data, predicted_data, plot_figure=False, dir_save_fig=''):
     """
