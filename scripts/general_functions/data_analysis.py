@@ -29,7 +29,6 @@ from sklearn.metrics import confusion_matrix
 import copy
 #from pandas_ml import ConfusionMatrix
 
-os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
 
 def convert_categorical_str_to_numerical(category_list):
     """
@@ -773,6 +772,7 @@ def plot_training_history(list_csv_files, save_dir=''):
 
 
 def analyze_dataset_distribution(dataset_dir, plot_figure=False, dir_save_fig=''):
+    os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
     list_cases = sorted([f for f in os.listdir(dataset_dir) if os.path.isdir(dataset_dir + f)])
     cases_ocurence = {'CIS WLI': 0, 'CIS NBI': 0, 'HGC WLI': 0, 'HGC NBI': 0, 'HLT WLI': 0, 'HLT NBI': 0,
                       'LGC WLI': 0, 'LGC NBI': 0, 'NTL WLI': 0, 'NTL NBI': 0}
