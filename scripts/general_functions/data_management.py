@@ -1198,6 +1198,7 @@ def build_csv_from_other_csv(directory_files, csv_dir, output_csv_file_dir=''):
         output_csv_file_dir = ''.join([directory_files, 'annotations_', case_name, '.csv'])
 
     new_df.to_csv(output_csv_file_dir, index=False)
+    print(f'File saved at:{output_csv_file_dir}')
 
 
 def merge_annotations_data(annotations_list, selected_elements=[], output_dir=''):
