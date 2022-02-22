@@ -9,7 +9,7 @@ from classification import call_models as img_class
 from segmentation import call_models as segm
 from classification import grad_cam as gc
 
-DATASETS = ['tissue_classification', 'kvasir_image_classification', 'bladder_tissue_classification']
+DATASETS = ['tissue_classification', 'kvasir_image_classification', 'bladder_tissue_classification', 'bladder_tissue_classification_v2']
 
 flags.DEFINE_string('experiment_type', '', 'experiment type')
 flags.DEFINE_string('name_model', 'fc_3layers', 'name of the model')
