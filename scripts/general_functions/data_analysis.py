@@ -894,6 +894,7 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
     History plot, Confusion Matrix
 
     """
+    os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
     list_prediction_files = [f for f in os.listdir(predictions_data_dir) if 'predictions' in f and '(_pre' not in f]
     list_history_files = [f for f in os.listdir(predictions_data_dir) if 'train_history' in f]
     ordered_history = list()
