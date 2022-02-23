@@ -926,6 +926,19 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
     plot_training_history(ordered_history, save_dir=predictions_data_dir)
     compute_confusion_matrix(gt_vals, ordered_predictiosn, plot_figure=True, dir_save_fig=predictions_data_dir)
 
+    gt_values = []
+    for name in predictions_names:
+        if name in gt_names:
+            index = gt_names.index(name)
+            gt_values.append(gt_vals[index])
+
+    new_df = df_preditc_data.copy()
+    data_top = list(new_df.columns)
+    print(data_top, len(data_top))
+    new_df.insert(len(data_top), "real values", gt_values, allow_duplicates=True)
+    name_data_save = path_file_predictions
+    new_df.to_csv(name_data_save, index=False)
+    print(f'results saved at {name_data_save}')
 
 def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_results_test_0'], dir_save_results='',
                         exclude=[], top_results=1.0):
