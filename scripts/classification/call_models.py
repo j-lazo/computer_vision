@@ -145,7 +145,7 @@ def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', b
     return id_name
 
 
-def load_pretrained_model(name_model, weights='imagenet', include_top=False, trainable=False):
+    def load_pretrained_model(name_model, weights='imagenet', include_top=False, trainable=False):
     base_dir_weights = ''.join([os.getcwd(), '/scripts/classification/weights_pretrained_models/'])
     """
     Loads a pretrained model given a name
@@ -189,7 +189,7 @@ def load_pretrained_model(name_model, weights='imagenet', include_top=False, tra
         base_model.trainable = trainable
         input_size = (224, 224, 3)
 
-    elif name_model == 'densenet':
+    elif name_model == 'densenet121':
         weights_dir = base_dir_weights + 'densenet/densenet121_weights_tf_dim_ordering_tf_kernels_notop.h5'
         base_model = applications.densenet.DenseNet121(include_top=include_top, weights=weights_dir)
         base_model.trainable = trainable
