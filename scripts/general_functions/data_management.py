@@ -146,7 +146,7 @@ def colorize(image, hue):
     return new_img
 
 
-def augment_image(img, mask):
+def augment_image(img, mask=[]):
     """
 
     :param img:
@@ -158,7 +158,8 @@ def augment_image(img, mask):
     list_operations = []
 
     augmented_imgs.append(img)
-    augmented_masks.append(mask)
+    if mask:
+        augmented_masks.append(mask)
 
     rows, cols, channels = img.shape
     # define the rotation matrixes
@@ -175,12 +176,13 @@ def augment_image(img, mask):
     augmented_imgs.append(im_rot3)
 
     # rotate the masks
-    mask_rot1 = cv2.warpAffine(mask, rot1, (cols, rows))
-    mask_rot2 = cv2.warpAffine(mask, rot2, (cols, rows))
-    mask_rot3 = cv2.warpAffine(mask, rot3, (cols, rows))
-    augmented_masks.append(mask_rot1)
-    augmented_masks.append(mask_rot2)
-    augmented_masks.append(mask_rot3)
+    if mask:
+        mask_rot1 = cv2.warpAffine(mask, rot1, (cols, rows))
+        mask_rot2 = cv2.warpAffine(mask, rot2, (cols, rows))
+        mask_rot3 = cv2.warpAffine(mask, rot3, (cols, rows))
+        augmented_masks.append(mask_rot1)
+        augmented_masks.append(mask_rot2)
+        augmented_masks.append(mask_rot3)
 
     # flip images
     horizontal_img = cv2.flip(img, 0)
@@ -188,13 +190,15 @@ def augment_image(img, mask):
     augmented_imgs.append(horizontal_img)
     augmented_imgs.append(vertical_img)
     # flip masks
-    horizontal_mask = cv2.flip(mask, 0)
-    vertical_mask = cv2.flip(mask, 1)
-    augmented_masks.append(horizontal_mask)
-    augmented_masks.append(vertical_mask)
+    if mask:
+        horizontal_mask = cv2.flip(mask, 0)
+        vertical_mask = cv2.flip(mask, 1)
+        augmented_masks.append(horizontal_mask)
+        augmented_masks.append(vertical_mask)
 
     list_of_images = copy.copy(augmented_imgs)
-    list_of_masks = copy.copy(augmented_masks)
+    if mask:
+        list_of_masks = copy.copy(augmented_masks)
 
     # change brightness
     gammas = [0.6, 0.7, 0.8, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5]
@@ -202,29 +206,36 @@ def augment_image(img, mask):
     for i in range(4):
         index = random.randint(0, len(list_of_images) - 1)
         img_choice = list_of_images[index]
-        mask_choice = list_of_masks[index]
+        if mask:
+            mask_choice = list_of_masks[index]
         image_brg = adjust_brightness(img_choice, random.choice(gammas))
         augmented_imgs.append(image_brg)
-        augmented_masks.append(mask_choice)
-
+        if mask:
+            augmented_masks.append(mask_choice)
 
     # zoom in
     index_2 = random.randint(0, len(list_of_images) - 1)
     img_choice_2 = list_of_images[index_2]
-    mask_choice_2 = list_of_masks[index_2]
     zoom_in_img = clipped_zoom(img_choice_2, 1.2)
-    zoom_in_mask = clipped_zoom(mask_choice_2, 1.2)
+    if mask:
+        mask_choice_2 = list_of_masks[index_2]
+        zoom_in_mask = clipped_zoom(mask_choice_2, 1.2)
+
     augmented_imgs.append(zoom_in_img)
-    augmented_masks.append(zoom_in_mask)
+    if mask:
+        augmented_masks.append(zoom_in_mask)
 
     # zoom out
     index_3 = random.randint(0, len(list_of_images) - 1)
     img_choice_3 = list_of_images[index_3]
-    mask_choice_3 = list_of_masks[index_3]
     zoom_out_img = clipped_zoom(img_choice_3, 0.8)
-    zoom_out_mask = clipped_zoom(mask_choice_3, 0.8)
     augmented_imgs.append(zoom_out_img)
-    augmented_masks.append(zoom_out_mask)
+
+    if mask:
+        mask_choice_3 = list_of_masks[index_3]
+        zoom_out_mask = clipped_zoom(mask_choice_3, 0.8)
+        augmented_masks.append(zoom_out_mask)
+
 
     # change hue
     #index_4 = random.randint(0, len(list_of_images) - 1)
@@ -237,10 +248,13 @@ def augment_image(img, mask):
     # change contrast
     index_5 = random.randint(0, len(list_of_images) - 1)
     img_choice_5 = list_of_images[index_5]
-    mask_choice_5 = list_of_masks[index_5]
     stateless_random_contrast = tf.image.stateless_random_contrast(img_choice_5, lower=0.5, upper=0.9, seed = (i, 0))
     augmented_imgs.append(stateless_random_contrast.numpy())
-    augmented_masks.append(mask_choice_5)
+
+    if mask:
+        mask_choice_5 = list_of_masks[index_5]
+        augmented_masks.append(mask_choice_5)
+
 
     #index_6 = random.randint(0, len(list_of_images) - 1)
     #img_choice_6 = list_of_images[index_6]
@@ -251,55 +265,79 @@ def augment_image(img, mask):
 
     index_7 = random.randint(0, len(list_of_images) - 1)
     img_choice_7 = list_of_images[index_7]
-    mask_choice_7 = list_of_masks[index_7]
     saturated = tf.image.adjust_saturation(img_choice_7, 3)
     augmented_imgs.append(saturated.numpy())
-    augmented_masks.append(mask_choice_7)
 
-    return augmented_imgs, augmented_masks, list_operations
+    if mask:
+        mask_choice_7 = list_of_masks[index_7]
+        augmented_masks.append(mask_choice_7)
+
+    if mask:
+        return augmented_imgs, augmented_masks, list_operations
+    else:
+        return augmented_imgs, list_operations
 
 
-def augment_dataset(files_path, destination_path='', visualize_augmentation=False):
+def augment_dataset(files_path, destination_path='', visualize_augmentation=False, augment_maks=False):
     """
     Performs data augmentation given a directory containing images and masks
     :param files_path:
     :param destination_path:
     :return:
     """
-    files = os.listdir(files_path + 'images/')
-    masks = os.listdir(files_path + 'masks/')
+    if augment_maks is True:
+        files = os.listdir(files_path + 'images/')
+        masks = os.listdir(files_path + 'masks/')
+
+    else:
+        files = os.listdir(files_path)
 
     if destination_path == '':
         destination_path = files_path
     else:
         if not(os.path.isdir(destination_path)):
             os.mkdir(destination_path)
-            os.mkdir(destination_path + 'images/')
-            os.mkdir(destination_path + 'masks/')
+
+            if augment_maks is True:
+                os.mkdir(destination_path + 'images/')
+                os.mkdir(destination_path + 'masks/')
 
     for i, element in enumerate(tqdm.tqdm(files[:], desc='Augmenting Dataset')):
+        if augment_maks is True:
+            if element not in masks:
+                print(f'{element}, has no pair')
 
-        if element not in masks:
-            print(f'{element}, has no pair')
+        if augment_maks is True:
+            img = cv2.imread("".join([files_path, 'images/', element]))
+            mask = cv2.imread("".join([files_path, 'masks/', element]))
 
-        img = cv2.imread("".join([files_path, 'images/', element]))
-        mask = cv2.imread("".join([files_path, 'masks/', element]))
-        list_images, list_masks, list_operations, = augment_image(img, mask)
+        else:
+            img = cv2.imread("".join([files_path, element]))
+
+        if augment_maks is True:
+            list_images, list_masks, list_operations, = augment_image(img, mask)
+
+        else:
+            list_images, list_operations, = augment_image(img)
 
         # visualize the augmentation
 
         if visualize_augmentation is True:
             plt.figure()
             for i in range(len(list_images)-1):
-                plt.subplot(4,4,i+1)
+                plt.subplot(4, 4, i+1)
                 plt.imshow(list_images[i])
 
             plt.show()
 
         # save the images
         for i, image in enumerate(list_images):
-            cv2.imwrite("".join([destination_path, 'images/', element[:-4], '_', str(i).zfill(3), '.png']), list_images[i])
-            cv2.imwrite("".join([destination_path, 'masks/', element[:-4], '_', str(i).zfill(3), '.png']), list_masks[i])
+            if augment_maks is True:
+                cv2.imwrite("".join([destination_path, 'images/', element[:-4], '_', str(i).zfill(3), '.png']), list_images[i])
+                cv2.imwrite("".join([destination_path, 'masks/', element[:-4], '_', str(i).zfill(3), '.png']), list_masks[i])
+            else:
+                cv2.imwrite("".join([destination_path, element[:-4], '_', str(i).zfill(3), '.png']),
+                            list_images[i])
 
 
 def check_folder_exists(folder_dir, create_folder=False):
