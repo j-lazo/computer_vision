@@ -878,7 +878,8 @@ def compute_confusion_matrix(gt_data, predicted_data, plot_figure=False, dir_sav
     return conf_matrix
 
 
-def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figure=False, dir_save_fig=''):
+def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figure=False, dir_save_fig='',
+                                  analyze_training_history=False):
     """
     Analyze the results of a multi-class classification experiment
 
@@ -896,14 +897,6 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
     """
     os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
     list_prediction_files = [f for f in os.listdir(predictions_data_dir) if 'predictions' in f and '(_pre' not in f]
-    list_history_files = [f for f in os.listdir(predictions_data_dir) if 'train_history' in f]
-    ordered_history = list()
-    fine_tune_file = predictions_data_dir + [f for f in list_history_files if 'fine_tune' in f].pop()
-    if fine_tune_file:
-        ordered_history.append(fine_tune_file)
-
-    ordered_history.append(predictions_data_dir + list_history_files[-1])
-
     file_predictiosn = list_prediction_files.pop()
     path_file_predictions = predictions_data_dir + file_predictiosn
     print(f'file predictions: {file_predictiosn}')
@@ -923,7 +916,6 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
             index = predictions_names.index(name)
             ordered_predictiosn.append(predictions_vals[index])
 
-    plot_training_history(ordered_history, save_dir=predictions_data_dir)
     compute_confusion_matrix(gt_vals, ordered_predictiosn, plot_figure=True, dir_save_fig=predictions_data_dir)
 
     gt_values = []
@@ -938,6 +930,20 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
     name_data_save = path_file_predictions
     new_df.to_csv(name_data_save, index=False)
     print(f'results saved at {name_data_save}')
+
+    if analyze_training_history is True:
+        list_history_files = [f for f in os.listdir(predictions_data_dir) if 'train_history' in f]
+        ordered_history = list()
+        fine_tune_file = predictions_data_dir + [f for f in list_history_files if 'fine_tune' in f].pop()
+        if fine_tune_file:
+            ordered_history.append(fine_tune_file)
+
+        ordered_history.append(predictions_data_dir + list_history_files[-1])
+        plot_training_history(ordered_history, save_dir=predictions_data_dir)
+
+
+
+
 
 def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_results_test_0'], dir_save_results='',
                         exclude=[], top_results=1.0):
