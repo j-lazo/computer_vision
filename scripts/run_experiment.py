@@ -94,10 +94,21 @@ def run_experiment_classification(_argv):
                           fine_tune_epochs=fine_tune_epochs)
 
 
+def run_inference_classification(_argv):
+
+    directory_model = FLAGS.directory_model
+    file_to_predic = FLAGS.file_to_predic
+    mode = 'predict'
+
+    print('EXPERIMENT INFORMATION:', mode, file_to_predic)
+    img_class.call_models('', mode, directory_model=directory_model, file_to_predic=file_to_predic)
+
+
 def main(_argv):
     FUNCTION_MAP = {'grad_cam': grad_cam_experiment,
                     'classification': run_experiment_classification,
-                    'segmentation': run_segmentation_experiment}
+                    'segmentation': run_segmentation_experiment,
+                    'inference_classification': run_inference_classification}
     func = FUNCTION_MAP[FLAGS.experiment_type]
     try:
         app.run(func)
