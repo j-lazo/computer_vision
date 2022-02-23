@@ -910,13 +910,16 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
     gt_names = df_ground_truth['image_name'].tolist()
     gt_vals = df_ground_truth['tissue type'].tolist()
 
+    existing_gt_vals = list()
     ordered_predictiosn = list()
-    for name in gt_names:
-        if name in predictions_names:
+    for name in predictions_names:
+        if name in gt_names:
             index = predictions_names.index(name)
             ordered_predictiosn.append(predictions_vals[index])
+            index_gt = gt_names.index(name)
+            existing_gt_vals.append(gt_vals[index_gt])
 
-    compute_confusion_matrix(gt_vals, ordered_predictiosn, plot_figure=True, dir_save_fig=predictions_data_dir)
+    compute_confusion_matrix(existing_gt_vals, ordered_predictiosn, plot_figure=True, dir_save_fig=predictions_data_dir)
 
     gt_values = []
     for name in predictions_names:
@@ -1104,6 +1107,50 @@ def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_
     export_data_used.to_csv(name_data_save)
     print(f'results saved at {dir_save_results}')
 
+
+def merge_continuous_frames_results(csv_file_dir):
+    print(csv_file_dir)
+    def group_frames():
+        pass
+
+    ordered_classes = ['CIS', 'HGC', 'HLT', 'LGC', 'NTL']
+    df = pd.read_csv(csv_file_dir)
+    list_names = df['fname'].tolist()
+    selected_names = [name for i, name in enumerate(list_names) if i % 8 ==0]
+    list_class_1 = df['class_1'].tolist()
+    list_class_2 = df['class_2'].tolist()
+    list_class_3 = df['class_3'].tolist()
+    list_class_4 = df['class_4'].tolist()
+    list_class_5 = df['class_5'].tolist()
+
+    group_class_1 = list()
+    group_class_2 = list()
+    group_class_3 = list()
+    group_class_4 = list()
+    group_class_5 = list()
+    over_all_names = list()
+
+    for i in range(len(selected_names)):
+        init = i*8
+        end = ((i+1)*8)
+        group_class_1.append(np.mean(list_class_1[init:end]))
+        group_class_2.append(np.mean(list_class_2[init:end]))
+        group_class_3.append(np.mean(list_class_3[init:end]))
+        group_class_4.append(np.mean(list_class_4[init:end]))
+        group_class_5.append(np.mean(list_class_5[init:end]))
+
+    for j, name in enumerate(selected_names):
+        scores = [group_class_1[j], group_class_2[j], group_class_3[j], group_class_4[j], group_class_5[j]]
+        over_all_names.append(ordered_classes[scores.index(np.amax(scores))])
+
+    d = {'fname': selected_names, 'class_1': group_class_1, 'class_2': group_class_2, 'class_3': group_class_3,
+        'class_4': group_class_4, 'class_5': group_class_5, 'over all': over_all_names}
+
+    pd.DataFrame(data=d)
+    new_df = pd.DataFrame(d)
+    print(new_df)
+    file_name = os.path.split(csv_file_dir)[0] + '/predictions_temporal_grouped.csv'
+    new_df.to_csv(file_name, index=False)
 
 if __name__ == '__main__':
     dir_folder_experiments = ''
