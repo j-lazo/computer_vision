@@ -806,8 +806,6 @@ def update_dictionary(dictionary, image_name, utility='', clearness='', resoluti
     return dictionary
 
 
-
-
 def create_annotations_file_old_data(directory, file_name='', file_extension='.csv'):
     """
     Creates an annotation file according to the structure of the directory tree. The output files could be

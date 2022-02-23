@@ -934,7 +934,6 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
 
     new_df = df_preditc_data.copy()
     data_top = list(new_df.columns)
-    print(data_top, len(data_top))
     new_df.insert(len(data_top), "real values", gt_values, allow_duplicates=True)
     name_data_save = path_file_predictions
     new_df.to_csv(name_data_save, index=False)
