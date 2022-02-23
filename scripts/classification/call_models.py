@@ -145,7 +145,7 @@ def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', b
     return id_name
 
 
-    def load_pretrained_model(name_model, weights='imagenet', include_top=False, trainable=False):
+def load_pretrained_model(name_model, weights='imagenet', include_top=False, trainable=False):
     base_dir_weights = ''.join([os.getcwd(), '/scripts/classification/weights_pretrained_models/'])
     """
     Loads a pretrained model given a name
