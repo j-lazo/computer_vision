@@ -381,7 +381,7 @@ def load_data(data_dir, annotations_file='', backbone_model='',
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.mobilenet.preprocess_input)
             img_width, img_height = 224, 224
 
-        elif backbone_model == 'densenet':
+        elif backbone_model == 'densenet121':
             data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.densenet.preprocess_input)
             img_width, img_height = 224, 224
 
@@ -650,10 +650,7 @@ def call_models(name_model, mode, data_dir=os.getcwd() + '/data/', validation_da
             new_results_id = generate_experiment_ID(prediction_model=os.path.basename(os.path.normpath(directory_model)))
             results_directory = directory_model
 
-            if not os.path.isdir(file_to_predic):
-                os.mkdir(file_to_predic)
-
-            evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model,
+            evalute_test_directory(model, file_to_predic, results_directory, new_results_id, backbone_model,
                                    analyze_data=True)
 
         elif file_to_predic == 'webcam':
