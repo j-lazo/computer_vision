@@ -231,6 +231,12 @@ def analyze_data_gradcam(name_model, dataset_dir, dataset_to_analyze, output_dir
     if os.path.isdir(dataset_to_analyze):
         if output_dir == '':
             dataset_name = dataset_dir.split('/')[-2]
+            gradcam_predictions_predictions_dir = ''.join([dataset_dir, 'results/', name_model,
+                                  '/gradcam_predictions/'])
+
+            if not os.path.isdir(gradcam_predictions_predictions_dir):
+                os.mkdir(gradcam_predictions_predictions_dir)
+
             output_dir = ''.join([dataset_dir, 'results/', name_model,
                                   '/gradcam_predictions/', dataset_name, '/'])
 
