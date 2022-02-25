@@ -1108,10 +1108,63 @@ def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_
     print(f'results saved at {dir_save_results}')
 
 
+def naive_ensembles(file_1, file_2):
+
+    ordered_classes = ['CIS', 'HGC', 'HLT', 'LGC', 'NTL']
+
+    df1 = pd.read_csv(file_1)
+    df2 = pd.read_csv(file_2)
+
+    list_names_1 = df1['fname'].tolist()
+    list_names_2 = df2['fname'].tolist()
+
+    list_class_11 = df1['class_1'].tolist()
+    list_class_21 = df1['class_2'].tolist()
+    list_class_31 = df1['class_3'].tolist()
+    list_class_41 = df1['class_4'].tolist()
+    list_class_51 = df1['class_5'].tolist()
+
+    list_class_12 = df2['class_1'].tolist()
+    list_class_22 = df2['class_2'].tolist()
+    list_class_32 = df2['class_3'].tolist()
+    list_class_42 = df2['class_4'].tolist()
+    list_class_52 = df2['class_5'].tolist()
+
+    group_class_1 = list()
+    group_class_2 = list()
+    group_class_3 = list()
+    group_class_4 = list()
+    group_class_5 = list()
+    over_all_names = list()
+    over_all_class = list()
+
+    for j, name in enumerate(list_names_1):
+        if name in list_names_2:
+            over_all_names.append(name)
+            index_1 = list_names_1.index(name)
+            index_2 = list_names_2.index(name)
+            group_class_1.append(np.mean([list_class_11[index_1], list_class_12[index_2]]))
+            group_class_2.append(np.mean([list_class_21[index_1], list_class_22[index_2]]))
+            group_class_3.append(np.mean([list_class_31[index_1], list_class_32[index_2]]))
+            group_class_4.append(np.mean([list_class_41[index_1], list_class_42[index_2]]))
+            group_class_5.append(np.mean([list_class_51[index_1], list_class_52[index_2]]))
+
+    for j, name in enumerate(over_all_names):
+        scores = [group_class_1[j], group_class_2[j], group_class_3[j], group_class_4[j], group_class_5[j]]
+        over_all_class.append(ordered_classes[scores.index(np.amax(scores))])
+
+    d = {'fname': over_all_names, 'class_1': group_class_1, 'class_2': group_class_2, 'class_3': group_class_3,
+        'class_4': group_class_4, 'class_5': group_class_5, 'over all': over_all_class}
+
+    pd.DataFrame(data=d)
+    new_df = pd.DataFrame(d)
+    print(new_df)
+    file_name = 'predictions_ensemble.csv'
+    new_df.to_csv(file_name, index=False)
+
+
 def merge_continuous_frames_results(csv_file_dir):
     print(csv_file_dir)
-    def group_frames():
-        pass
 
     ordered_classes = ['CIS', 'HGC', 'HLT', 'LGC', 'NTL']
     df = pd.read_csv(csv_file_dir)
