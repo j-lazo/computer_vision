@@ -13,7 +13,6 @@ from scipy.ndimage import zoom
 from PIL import Image
 
 from matplotlib import pyplot as plt
-import keras
 import tensorflow as tf
 #import skimage
 
