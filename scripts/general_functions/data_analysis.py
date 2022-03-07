@@ -27,6 +27,7 @@ from sklearn.metrics import roc_curve
 from sklearn.metrics import auc
 from sklearn.metrics import confusion_matrix
 import copy
+import collections
 #from pandas_ml import ConfusionMatrix
 
 
@@ -834,46 +835,50 @@ def compute_confusion_matrix(gt_data, predicted_data, plot_figure=False, dir_sav
     -------
 
     """
-    uniques = np.unique(gt_data)
+    uniques_predicts = np.unique(predicted_data)
+    uniques_gt = np.unique(gt_data)
+    if collections.Counter(uniques_gt) == collections.Counter(uniques_predicts):
+        uniques = uniques_gt
+    else:
+        uniques = np.unique([*uniques_gt, *uniques_predicts])
+
     ocurrences = [gt_data.count(unique) for unique in uniques]
-    group_percentages = list()
     conf_matrix = confusion_matrix(gt_data, predicted_data)
     group_percentages = [conf_matrix[i]/ocurrences[i] for i, row in enumerate(conf_matrix)]
 
-    if plot_figure is True:
+    size = len(list(uniques))
+    list_uniques = list(uniques)
+    xlabel_names = list()
+    for name in list_uniques:
+        # if the name of the unique names is longer than 4 characters will split it
+        if len(name) > 4:
+            name_split = name.split('-')
+            new_name = ''
+            for splits in name_split:
+                new_name = new_name.join([splits[0]])
 
-        size = len(list(uniques))
-        list_uniques = list(uniques)
-        xlabel_names = list()
-        for name in list_uniques:
-            # if the name of the unique names is longer than 4 characters will split it
-            if len(name) > 4:
-                name_split = name.split('-')
-                new_name = ''
-                for splits in name_split:
-                    new_name = new_name.join([splits[0]])
-
-                xlabel_names.append(new_name)
-            else:
-                xlabel_names.append(name)
-
-        labels = np.asarray(group_percentages).reshape(size, size)
-        sns.heatmap(group_percentages, cmap='Blues', cbar=False, linewidths=.5,
-                    yticklabels=list(uniques), xticklabels=list(xlabel_names), annot=labels)
-        plt.xlabel('Predicted Class')
-        plt.ylabel('Real Class')
-
-
-        if dir_save_fig == '':
-            dir_save_figure = os.getcwd() + '/confusion_matrix.png'
+            xlabel_names.append(new_name)
         else:
-            dir_save_figure = dir_save_fig + 'confusion_matrix.png'
+            xlabel_names.append(name)
 
-        print(f'figure saved at: {dir_save_figure}')
-        plt.savefig(dir_save_figure)
+    labels = np.asarray(group_percentages).reshape(size, size)
+    sns.heatmap(group_percentages, cmap='Blues', cbar=False, linewidths=.5,
+                yticklabels=list(uniques), xticklabels=list(xlabel_names), annot=labels)
+    plt.xlabel('Predicted Class')
+    plt.ylabel('Real Class')
 
-        plt.close()
-        #plt.show()
+    if plot_figure is True:
+        plt.show()
+
+    if dir_save_fig == '':
+        dir_save_figure = os.getcwd() + '/confusion_matrix.png'
+    else:
+        dir_save_figure = dir_save_fig + 'confusion_matrix.png'
+
+    print(f'figure saved at: {dir_save_figure}')
+
+    #plt.savefig(dir_save_figure)
+    #plt.close()
 
     return conf_matrix
 
@@ -943,9 +948,6 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
 
         ordered_history.append(predictions_data_dir + list_history_files[-1])
         plot_training_history(ordered_history, save_dir=predictions_data_dir)
-
-
-
 
 
 def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_results_test_0'], dir_save_results='',
@@ -1108,6 +1110,104 @@ def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_
     print(f'results saved at {dir_save_results}')
 
 
+def analyze_dataset_multihead_pie_chart(dir_csv_file, headers=['imaging type', 'tissue type']):
+    df = pd.read_csv(dir_csv_file)
+
+    img_names = df['image_name'].tolist()
+    tissue_types = df['tissue type'].tolist()
+    imaging_types = df['imaging type'].tolist()
+
+    wli_tissues = []
+    nbi_tissues = []
+    all_tissues = []
+
+    for i, names in enumerate(img_names):
+        if imaging_types[i] == 'WLI':
+            wli_tissues.append(tissue_types[i])
+            all_tissues.append('WLI ' + tissue_types[i])
+        if imaging_types[i] == 'NBI':
+            nbi_tissues.append(tissue_types[i])
+            all_tissues.append('NBI ' + tissue_types[i])
+
+    ocurrences_nbi = [nbi_tissues.count(unique) for unique in np.unique(nbi_tissues)]
+    ocurrences_wli = [wli_tissues.count(unique) for unique in np.unique(wli_tissues)]
+    ocurrences_all = [all_tissues.count(unique) for unique in np.unique(all_tissues)]
+
+    print(np.unique(all_tissues))
+    print(ocurrences_all)
+    fig1 = plt.figure(1, figsize=(12, 7))
+    ax1 = fig1.add_subplot(131)
+    ax1.pie(ocurrences_all, labels=np.unique(all_tissues), autopct='%.0f%%')
+    ax1.title.set_text('ALL')
+
+    ax2 = fig1.add_subplot(132)
+    ax2.pie(ocurrences_wli, labels=np.unique(wli_tissues), autopct='%.0f%%')
+    ax2.title.set_text('WLI')
+
+    ax3 = fig1.add_subplot(133)
+    ax3.pie(ocurrences_nbi, labels=np.unique(nbi_tissues), autopct='%.0f%%')
+    ax3.title.set_text('NBI')
+
+    plt.show()
+
+
+def analyze_dataset_pie_chart(dir_csv_file, header):
+    df = pd.read_csv(dir_csv_file)
+    data_to_analyze = df[header].tolist()
+    unique_values = np.unique(data_to_analyze)
+    ocurrences = [data_to_analyze.count(unique) for unique in unique_values]
+    print(unique_values, ocurrences)
+    labels = unique_values
+    plot_data = ocurrences
+    plt.figure()
+    plt.pie(plot_data, labels=labels, autopct='%.0f%%')
+    plt.show()
+
+
+def analyze_and_wli(gt_file, predictions_file, plot_figure=False, dir_save_fig='',
+                    analyze_multiclass=False):
+
+    df_ground_truth = pd.read_csv(gt_file)
+    df_predicted_data = pd.read_csv(predictions_file)
+
+    predictions_names = df_predicted_data['fname'].tolist()
+    predictions_vals = df_predicted_data['over all'].tolist()
+
+    gt_names = df_ground_truth['image_name'].tolist()
+    gt_vals = df_ground_truth['tissue type'].tolist()
+    imaging_type = df_ground_truth['imaging type'].tolist()
+
+    wli_imgs = []
+    nbi_imgs = []
+
+    predictions_nbi = []
+    predictions_wli = []
+
+    wli_tissue_types = []
+    nbi_tissue_types = []
+
+    for name in predictions_names:
+        if name in gt_names:
+            index = predictions_names.index(name)
+            if imaging_type[index] == 'NBI':
+                nbi_imgs.append(name)
+                predictions_nbi.append(predictions_vals[index])
+                nbi_tissue_types.append(gt_vals[index])
+            if imaging_type[index] == 'WLI':
+                wli_imgs.append(name)
+                predictions_wli.append(predictions_vals[index])
+                wli_tissue_types.append(gt_vals[index])
+
+    print('Accuracy: ', accuracy_score(wli_tissue_types, predictions_wli))
+    print('Precision: ', precision_score(wli_tissue_types, predictions_wli, average=None))
+    print('Recall: ', recall_score(wli_tissue_types, predictions_wli, average=None))
+    compute_confusion_matrix(wli_tissue_types, predictions_wli, plot_figure=True)
+    print('Accuracy: ', accuracy_score(nbi_tissue_types, predictions_nbi))
+    print('Precision: ', precision_score(nbi_tissue_types, predictions_nbi, average=None, zero_division=1))
+    print('Recall: ', recall_score(nbi_tissue_types, predictions_nbi, average=None, zero_division=1))
+    compute_confusion_matrix(nbi_tissue_types, predictions_nbi, plot_figure=True)
+
+
 def naive_ensembles(file_1, file_2):
 
     ordered_classes = ['CIS', 'HGC', 'HLT', 'LGC', 'NTL']
@@ -1204,6 +1304,7 @@ def merge_continuous_frames_results(csv_file_dir):
     print(new_df)
     file_name = os.path.split(csv_file_dir)[0] + '/predictions_temporal_grouped.csv'
     new_df.to_csv(file_name, index=False)
+
 
 if __name__ == '__main__':
     dir_folder_experiments = ''
