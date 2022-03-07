@@ -1164,7 +1164,7 @@ def analyze_dataset_pie_chart(dir_csv_file, header):
     plt.show()
 
 
-def analyze_and_wli(gt_file, predictions_file, plot_figure=False, dir_save_fig='',
+def analyze_results_nbi_wli(gt_file, predictions_file, plot_figure=False, dir_save_fig='',
                     analyze_multiclass=False):
 
     df_ground_truth = pd.read_csv(gt_file)
