@@ -83,18 +83,28 @@ def run_experiment_classification(_argv):
     if mode == 'train_backbone':
         learning_rate = [1e-5, 1e-5]
 
+        print('EXPERIMENT INFORMATION:', name_model, backbone_model, mode)
+        img_class.call_models(name_model, mode, data_dir=data_dir,
+                              backbone_model=backbone_model, batch_size=batch_zie,
+                              epochs=epochs, test_data=test_data,
+                              analyze_data=analyze_data,
+                              learning_rate=learning_rate,
+                              trainable_layers=trainable_layers,
+                              results_dir=results_dir,
+                              fine_tune_epochs=fine_tune_epochs)
+
     elif mode == 'train':
         learning_rate = FLAGS.learning_rate
 
-    print('EXPERIMENT INFORMATION:', name_model, backbone_model, mode)
-    img_class.call_models(name_model, mode, data_dir=data_dir,
-                          backbone_model=backbone_model, batch_size=batch_zie,
-                          epochs=epochs, test_data=test_data,
-                          analyze_data=analyze_data,
-                          learning_rate=learning_rate,
-                          trainable_layers=trainable_layers,
-                          results_dir=results_dir,
-                          fine_tune_epochs=fine_tune_epochs)
+        print('EXPERIMENT INFORMATION:', name_model, backbone_model, mode)
+        img_class.call_models(name_model, mode, data_dir=data_dir,
+                              backbone_model=backbone_model, batch_size=batch_zie,
+                              epochs=epochs, test_data=test_data,
+                              analyze_data=analyze_data,
+                              learning_rate=learning_rate,
+                              trainable_layers=trainable_layers,
+                              results_dir=results_dir,
+                              fine_tune_epochs=fine_tune_epochs)
 
 
 def run_inference_classification(_argv):
