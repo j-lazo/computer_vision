@@ -83,6 +83,9 @@ def run_experiment_classification(_argv):
     if mode == 'train_backbone':
         learning_rate = [1e-5, 1e-5]
 
+    elif mode == 'train':
+        learning_rate = FLAGS.learning_rate
+
     print('EXPERIMENT INFORMATION:', name_model, backbone_model, mode)
     img_class.call_models(name_model, mode, data_dir=data_dir,
                           backbone_model=backbone_model, batch_size=batch_zie,
