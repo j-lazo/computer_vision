@@ -873,12 +873,15 @@ def compute_confusion_matrix(gt_data, predicted_data, plot_figure=False, dir_sav
     if dir_save_fig == '':
         dir_save_figure = os.getcwd() + '/confusion_matrix.png'
     else:
-        dir_save_figure = dir_save_fig + 'confusion_matrix.png'
+        if not dir_save_fig.endswith('.png'):
+          dir_save_figure = dir_save_fig + 'confusion_matrix.png'
+        else:
+            dir_save_figure = dir_save_fig
 
     print(f'figure saved at: {dir_save_figure}')
 
-    #plt.savefig(dir_save_figure)
-    #plt.close()
+    plt.savefig(dir_save_figure)
+    plt.close()
 
     return conf_matrix
 
@@ -1201,11 +1204,12 @@ def analyze_results_nbi_wli(gt_file, predictions_file, plot_figure=False, dir_sa
     print('Accuracy: ', accuracy_score(wli_tissue_types, predictions_wli))
     print('Precision: ', precision_score(wli_tissue_types, predictions_wli, average=None))
     print('Recall: ', recall_score(wli_tissue_types, predictions_wli, average=None))
-    compute_confusion_matrix(wli_tissue_types, predictions_wli, plot_figure=True)
+    dir_save_figs = os.path.split(predictions_file)[0]
+    compute_confusion_matrix(wli_tissue_types, predictions_wli, dir_save_fig=dir_save_figs + '/confusion_matrix_wli.png')
     print('Accuracy: ', accuracy_score(nbi_tissue_types, predictions_nbi))
     print('Precision: ', precision_score(nbi_tissue_types, predictions_nbi, average=None, zero_division=1))
     print('Recall: ', recall_score(nbi_tissue_types, predictions_nbi, average=None, zero_division=1))
-    compute_confusion_matrix(nbi_tissue_types, predictions_nbi, plot_figure=True)
+    compute_confusion_matrix(nbi_tissue_types, predictions_nbi, dir_save_fig=dir_save_figs + '/confusion_matrix_nbi.png')
 
 
 def naive_ensembles(file_1, file_2):
