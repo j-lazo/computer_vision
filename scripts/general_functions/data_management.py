@@ -378,6 +378,41 @@ def convert_image_format(dir_images, input_format, target_format, output_directo
         cv2.imwrite(''.join([output_directory, '/', img]).replace(input_format, target_format), img)
 
 
+def generate_imaging_dataset(directory_dataset, target_directory):
+
+    list_files = os.listdir(directory_dataset)
+    list_sub_folders = [f for f in list_files if os.path.isdir(directory_dataset + f)]
+
+    csv_file_name = [f for f in list_files if f.endswith('.csv')].pop()
+    df = pd.read_csv(directory_dataset + csv_file_name)
+    name_files_csv = df['image_name'].tolist()
+    imaging_type_csv = df['imaging type'].tolist()
+    save_dir_class_A = ''.join([target_directory, 'A/'])
+    save_dir_class_B = ''.join([target_directory, 'B/'])
+    if not os.path.isdir(save_dir_class_A):
+        os.mkdir(save_dir_class_A)
+
+    if not os.path.isdir(save_dir_class_B):
+        os.mkdir(save_dir_class_B)
+
+    for folder in list_sub_folders:
+        directory_subfolder = directory_dataset + folder
+        list_imgs = [f for f in os.listdir(directory_subfolder) if f.endswith('.png')]
+        for i, image_name in enumerate(tqdm.tqdm(list_imgs, desc='Coping images')):
+            if image_name in name_files_csv:
+                index = name_files_csv.index(image_name)
+                image_dir = ''.join([directory_dataset, folder, '/', image_name])
+                image = cv2.imread(image_dir)
+                if imaging_type_csv[index] == 'WLI':
+                    save_name = ''.join([target_directory, 'A/', image_name.replace('.png', '.jpg')])
+                if imaging_type_csv[index] == 'NBI':
+                    save_name = ''.join([target_directory, 'B/', image_name.replace('.png', '.jpg')])
+
+                cv2.imwrite(save_name, image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+
+
+
+
 def generate_training_and_validation_classification_sets(input_directory, output_directory,
                                           case_probabilities=0.5, test_dataset=False, sub_dirs=[], convert_data=[]):
 
