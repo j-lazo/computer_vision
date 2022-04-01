@@ -305,6 +305,58 @@ def create_video_from_frames(dir_frames, name_video=''):
     out.release()
 
 
+def arrange_data_from_gan(path_datafile, csv_annotations_dir, destination_dir=''):
+    """
+
+    Parameters
+    ----------
+    path_datafile :
+    csv_annotations :
+
+    Returns
+    -------
+
+    """
+
+    list_imgs = [f.replace('.jpg', '') for f in os.listdir(path_datafile) if f.endswith('.jpg')]
+    csv_path = [f for f in os.listdir(csv_annotations_dir) if f.endswith('.csv')].pop()
+    df = pd.read_csv(csv_annotations_dir + csv_path)
+    headers = list(df.columns)
+    new_df = pd.DataFrame(columns=headers)
+    list_labeled_images = df['image_name'].tolist()
+    list_labeled_images = [f.replace('.png', '') for f in list_labeled_images]
+    classification_images = df['tissue type'].tolist()
+    unique_classes = np.unique(classification_images)
+    print(df)
+    if destination_dir == '':
+        destination_dir = path_datafile
+
+    destination_dirs = {}
+    for element in unique_classes:
+        destination_dirs[element] = destination_dir + element
+        if not(os.path.isdir(destination_dir + element)):
+            os.mkdir(destination_dir + element)
+
+    j = 0
+    for i, image_name in enumerate(tqdm.tqdm(list_labeled_images[:], desc='Arranging images')):
+        for img_name in list_imgs:
+            if image_name in img_name:
+                index = list_labeled_images.index(image_name)
+                new_row = df.iloc[index]
+                new_row['image_name'] = img_name + '.png'
+                new_df.loc[j] = new_row
+                class_type = classification_images[index]
+                j = j + 1
+                img = cv2.imread("".join([path_datafile, img_name, '.jpg']))
+                destination_path = ''.join([destination_dirs[class_type], '/', img_name, '.png'])
+                cv2.imwrite(destination_path, img)
+
+    print(new_df)
+    output_csv_file_dir = destination_dir + 'annotations.csv'
+    new_df.to_csv(output_csv_file_dir, index=False)
+    print(f'File saved at:{output_csv_file_dir}')
+
+
 def augment_dataset(files_path, destination_path='', visualize_augmentation=False, augment_maks=False):
     """
     Performs data augmentation given a directory containing images and masks
@@ -448,8 +500,6 @@ def generate_imaging_dataset(directory_dataset, target_directory):
                     save_name = ''.join([target_directory, 'B/', image_name.replace('.png', '.jpg')])
 
                 cv2.imwrite(save_name, image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
-
-
 
 
 def generate_training_and_validation_classification_sets(input_directory, output_directory,
@@ -1292,7 +1342,6 @@ def build_csv_from_other_csv(directory_files, csv_dir, output_csv_file_dir=''):
                 new_df.loc[data_frame.index[i]] = data_frame.iloc[index]
                 i += 1
 
-
     else:
         i = 0
         for image in list_files:
@@ -1349,7 +1398,4 @@ if __name__ == "__main__":
     path_dir = ''
     reshape_data_blocks(path_dir)
     pass
-
-
-
 
