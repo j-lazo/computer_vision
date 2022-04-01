@@ -277,6 +277,34 @@ def augment_image(img, mask=[]):
         return augmented_imgs, list_operations
 
 
+def create_video_from_frames(dir_frames, name_video=''):
+    img_array = []
+    images_folder = sorted(os.listdir(dir_frames))
+
+    for i, filename in enumerate(tqdm.tqdm(images_folder[:], desc='Reading Images:')):
+        img = cv2.imread(dir_frames + filename)
+        height, width, layers = img.shape
+        size = (width, height)
+        img_array.append(img)
+
+    if name_video == '':
+        path_frames = dir_frames.split('/')
+        name_folder = path_frames[-2]
+        dir_video = ''.join([dir_frames.replace(name_folder + '/', ''), name_folder, '.mp4'])
+
+    fourcc = cv2.VideoWriter_fourcc(*'MPEG')
+    out = cv2.VideoWriter(dir_video, fourcc, 15, size)
+    print(f'video saved at: {dir_video}')
+
+    # out = cv2.VideoWriter(name_video, cv2.VideoWriter_fourcc(*'avi'), 15, size)
+    #for i, img_array in enumerate(tqdm.tqdm(images_folder[:], desc='Generating Video:')):
+
+    for i in range(len(img_array)):
+        print(i)
+        out.write(img_array[i])
+    out.release()
+
+
 def augment_dataset(files_path, destination_path='', visualize_augmentation=False, augment_maks=False):
     """
     Performs data augmentation given a directory containing images and masks
@@ -376,6 +404,17 @@ def convert_image_format(dir_images, input_format, target_format, output_directo
     for image in list_imgs:
         img = _read_img(dir_images + image)
         cv2.imwrite(''.join([output_directory, '/', img]).replace(input_format, target_format), img)
+
+
+def convert_dataset_png2jpg(directory_dataset):
+
+    list_imgs = [f for f in os.listdir(directory_dataset) if f.endswith('.png')]
+
+    for i, image_name in enumerate(tqdm.tqdm(list_imgs, desc='Coping images')):
+        image_dir = ''.join([directory_dataset, '/', image_name])
+        image = cv2.imread(image_dir)
+        save_name = ''.join([directory_dataset, image_name.replace('.png', '.jpg')])
+        cv2.imwrite(save_name, image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
 
 
 def generate_imaging_dataset(directory_dataset, target_directory):
