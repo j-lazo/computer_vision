@@ -27,6 +27,8 @@ sys.path.append(os.getcwd() + '/scripts/general_functions/')
 import data_management as dam
 import data_analysis as daa
 from classification import classification_models as cms
+import random
+
 
 class DataGenerator(tf.keras.utils.Sequence):
     # Generates data for Keras
@@ -85,6 +87,31 @@ class DataGenerator(tf.keras.utils.Sequence):
             y[i] = self.labels[i]
 
         return x, tf.keras.utils.to_categorical(y, num_classes=self.n_classes)
+
+
+class CustomDataGenerator(ImageDataGenerator):
+    def __init__(self,
+                 red_range=None,
+                 green_range=None,
+                 blue_range=None,
+                 **kwargs):
+        '''
+        Custom image data generator.
+        Behaves like ImageDataGenerator, but allows color augmentation.
+        '''
+
+
+    def augment_color(self, image):
+        '''Takes an input image and returns a modified version of it'''
+        channel_ranges = (self.red_range, self.green_range, self.blue_range)
+        for channel, channel_range in enumerate(channel_ranges):
+            if not channel_range:
+                continue  # no range set, so don't change that channel
+            scale = random.uniform(channel_range[0], channel_range[1])
+            image[:, :, channel] = image[:, :, channel] * scale
+
+        image = np.clip(image, 0, 255)
+        return image
 
 
 def make_predictions(model, innput_frame, output_size=(300, 300)):
@@ -366,7 +393,8 @@ def load_data(data_dir, annotations_file='', backbone_model='',
             img_width, img_height = 224, 224
 
         elif backbone_model == 'inception_v3':
-            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.inception_v3.preprocess_input)
+            data_idg = ImageDataGenerator(preprocessing_function=tf.keras.applications.inception_v3.preprocess_input,
+                                          horizontal_flip=True, vertical_flip=True, brightness_range=[0.15, 1.5])
             img_width, img_height = 299, 299
 
         elif backbone_model == 'resnet50':
