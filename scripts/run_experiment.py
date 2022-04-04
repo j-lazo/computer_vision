@@ -10,7 +10,7 @@ from segmentation import call_models as segm
 from classification import grad_cam as gc
 
 DATASETS = ['tissue_classification', 'kvasir_image_classification', 'bladder_tissue_classification',
-            'bladder_tissue_classification_v2', 'bladder_tissue_classification_v2_augmented']
+            'bladder_tissue_classification_v2', 'bladder_tissue_classification_v2_augmented', 'bladder_tissue_classification_gan']
 
 flags.DEFINE_string('experiment_type', '', 'experiment type')
 flags.DEFINE_string('name_model', 'fc_3layers', 'name of the model')
@@ -21,7 +21,7 @@ flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
 flags.DEFINE_integer('epochs', 15, 'number of epochs')
 flags.DEFINE_integer('trainable_layers', -7, 'Trainable layers in case backbone is trained')
 flags.DEFINE_bool('analyze_data', True, 'select if analyze data or not')
-flags.DEFINE_integer('fine_tune_epochs', 6, 'epochs to fine tune the model')
+flags.DEFINE_integer('fine_tune_epochs', 5, 'epochs to fine tune the model')
 flags.DEFINE_string('dataset_dir', os.getcwd() + 'data/', 'path to dataset')
 flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
 flags.DEFINE_string('test_dataset', '', 'path to test dataset')
@@ -79,6 +79,7 @@ def run_experiment_classification(_argv):
         results_dir = data_dir + 'results/'
     else:
         data_dir = dataset_dir
+        test_data = FLAGS.test_dataset
 
     if mode == 'train_backbone':
         learning_rate = [1e-5, 1e-5]
