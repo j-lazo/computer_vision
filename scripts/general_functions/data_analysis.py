@@ -872,7 +872,8 @@ def compute_confusion_matrix(gt_data, predicted_data, plot_figure=False, dir_sav
         plt.show()
 
     if dir_save_fig == '':
-        dir_save_figure = os.getcwd() + '/confusion_matrix.png'
+            dir_save_figure = os.getcwd() + '/confusion_matrix.png'
+
     else:
         if not dir_save_fig.endswith('.png'):
           dir_save_figure = dir_save_fig + 'confusion_matrix.png'
@@ -904,7 +905,7 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
     History plot, Confusion Matrix
 
     """
-    os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH")
+
     list_prediction_files = [f for f in os.listdir(predictions_data_dir) if 'predictions' in f and '(_pre' not in f]
     file_predictiosn = list_prediction_files.pop()
     path_file_predictions = predictions_data_dir + file_predictiosn
@@ -1270,6 +1271,35 @@ def naive_ensembles(file_1, file_2):
     print(new_df)
     file_name = 'predictions_ensemble.csv'
     new_df.to_csv(file_name, index=False)
+
+
+def analyze_simple_gan_results(csv_file_path):
+
+    df_preditc_data = pd.read_csv(csv_file_path)
+
+    predictions_names = df_preditc_data['fname'].tolist()
+    real_values = df_preditc_data['real class'].tolist()
+
+    predictions_original = df_preditc_data['prediction original'].tolist()
+    predictions_converted = df_preditc_data['prediction converted'].tolist()
+    predictions_reconverted = df_preditc_data['prediction original'].tolist()
+    predictions_average = df_preditc_data['average prediction'].tolist()
+    predictions_weighted = df_preditc_data['weighted prediction'].tolist()
+
+    output_images_dir = os.path.split(csv_file_path)[0]
+
+    compute_confusion_matrix(real_values, predictions_original, plot_figure=False,
+                             dir_save_fig=output_images_dir + '/original_images_all_confusion_matrix.png')
+    compute_confusion_matrix(real_values, predictions_converted, plot_figure=False,
+                             dir_save_fig=output_images_dir + '/converted_images_all_confusion_matrix.png')
+    compute_confusion_matrix(real_values, predictions_reconverted, plot_figure=False,
+                             dir_save_fig=output_images_dir + '/reconverted_images_all_confusion_matrix.png')
+    compute_confusion_matrix(real_values, predictions_average, plot_figure=False,
+                             dir_save_fig=output_images_dir + '/average_images_all_confusion_matrix.png')
+    compute_confusion_matrix(real_values, predictions_weighted, plot_figure=False,
+                             dir_save_fig=output_images_dir + '/weighted_images_all_confusion_matrix.png')
+
+
 
 
 def merge_reconstructed_gan_results(csv_file_dir, output_dir=None, gt_file=None):
