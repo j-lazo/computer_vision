@@ -318,7 +318,8 @@ def arrange_data_from_gan(path_datafile, csv_annotations_dir, destination_dir=''
 
     """
 
-    list_imgs = [f.replace('.jpg', '') for f in os.listdir(path_datafile) if f.endswith('.jpg')]
+    list_imgs = [f.replace('.jpg', '') for f in os.listdir(path_datafile) if f.endswith('.jpg') or f.endswith('.png')]
+    list_imgs = [f.replace('.png', '') for f in list_imgs]
     csv_path = [f for f in os.listdir(csv_annotations_dir) if f.endswith('.csv')].pop()
     df = pd.read_csv(csv_annotations_dir + csv_path)
     headers = list(df.columns)
@@ -327,7 +328,7 @@ def arrange_data_from_gan(path_datafile, csv_annotations_dir, destination_dir=''
     list_labeled_images = [f.replace('.png', '') for f in list_labeled_images]
     classification_images = df['tissue type'].tolist()
     unique_classes = np.unique(classification_images)
-    print(df)
+
     if destination_dir == '':
         destination_dir = path_datafile
 
@@ -458,14 +459,17 @@ def convert_image_format(dir_images, input_format, target_format, output_directo
         cv2.imwrite(''.join([output_directory, '/', img]).replace(input_format, target_format), img)
 
 
-def convert_dataset_png2jpg(directory_dataset):
+def convert_dataset_png2jpg(directory_dataset, output_directory=''):
+
+    if output_directory == '':
+        output_directory = directory_dataset
 
     list_imgs = [f for f in os.listdir(directory_dataset) if f.endswith('.png')]
 
     for i, image_name in enumerate(tqdm.tqdm(list_imgs, desc='Coping images')):
         image_dir = ''.join([directory_dataset, '/', image_name])
         image = cv2.imread(image_dir)
-        save_name = ''.join([directory_dataset, image_name.replace('.png', '.jpg')])
+        save_name = ''.join([output_directory, image_name.replace('.png', '.jpg')])
         cv2.imwrite(save_name, image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
 
 
