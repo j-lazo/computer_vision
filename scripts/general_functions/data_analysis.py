@@ -728,6 +728,7 @@ def plot_training_history(list_csv_files, save_dir=''):
         train_history = fine_tune_history.append(train_history, ignore_index=True)
 
     else:
+        fine_tune_lim = 0
         train_history = pd.read_csv(list_csv_files[0])
 
     fig = plt.figure(1, figsize=(12, 9))
@@ -927,7 +928,7 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
             index_gt = gt_names.index(name)
             existing_gt_vals.append(gt_vals[index_gt])
 
-    compute_confusion_matrix(existing_gt_vals, ordered_predictiosn, plot_figure=True, dir_save_fig=predictions_data_dir)
+    compute_confusion_matrix(existing_gt_vals, ordered_predictiosn, plot_figure=False, dir_save_fig=predictions_data_dir)
 
     gt_values = []
     for name in predictions_names:
@@ -945,8 +946,9 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
     if analyze_training_history is True:
         list_history_files = [f for f in os.listdir(predictions_data_dir) if 'train_history' in f]
         ordered_history = list()
-        fine_tune_file = predictions_data_dir + [f for f in list_history_files if 'fine_tune' in f].pop()
+        fine_tune_file = [f for f in list_history_files if 'fine_tune' in f]
         if fine_tune_file:
+            fine_tune_file_dir = predictions_data_dir + fine_tune_file.pop()
             ordered_history.append(fine_tune_file)
 
         ordered_history.append(predictions_data_dir + list_history_files[-1])
@@ -1201,10 +1203,13 @@ def analyze_results_nbi_wli(gt_file, predictions_file, plot_figure=False, dir_sa
                 predictions_wli.append(predictions_vals[index])
                 wli_tissue_types.append(gt_vals[index])
 
+    # predictions wli
     print('Accuracy: ', accuracy_score(wli_tissue_types, predictions_wli))
     print('Precision: ', precision_score(wli_tissue_types, predictions_wli, average=None))
     print('Recall: ', recall_score(wli_tissue_types, predictions_wli, average=None))
     dir_save_figs = os.path.split(predictions_file)[0]
+
+    # predictions nbi
     compute_confusion_matrix(wli_tissue_types, predictions_wli, dir_save_fig=dir_save_figs + '/confusion_matrix_wli.png')
     print('Accuracy: ', accuracy_score(nbi_tissue_types, predictions_nbi))
     print('Precision: ', precision_score(nbi_tissue_types, predictions_nbi, average=None, zero_division=1))
@@ -1266,6 +1271,107 @@ def naive_ensembles(file_1, file_2):
     file_name = 'predictions_ensemble.csv'
     new_df.to_csv(file_name, index=False)
 
+
+def merge_reconstructed_gan_results(csv_file_dir, output_dir=None, gt_file=None):
+    """
+    Merge the results from a file containing Cycle-GAN generated results, with the names converted, and re-converted
+    Parameters
+    ----------
+    csv_file_dir :
+    output_dir :
+    gt_file :
+
+    Returns
+    -------
+
+    """
+    classes = ['CIS', 'HGC', 'HLT', 'LGC', 'NTL']
+    # read the csv file
+    data_frame = pd.read_csv(csv_file_dir)
+    # prepare the headers for the new data-frame
+    original_header = list(data_frame.columns)
+    #original_header.remove('real values')
+    #original_header.remove('real values.1')
+    original_header = [f for f in original_header if 'real values' not in f]
+    original_header.remove('over all')
+    headers = list()
+    headers += original_header
+    header_1 = ['converted' if x == 'fname' else x + '_C' for x in original_header]
+    header_2 = ['re-converted' if x == 'fname' else x + '_R' for x in original_header]
+
+    headers += header_1
+    headers += header_2
+    headers.append('original imaging')
+    headers.append('prediction original')
+    headers.append('prediction converted')
+    headers.append('prediction reconverted')
+    headers.append('average prediction')
+    headers.append('weighted prediction')
+    headers.append('real class')
+    new_df = pd.DataFrame(columns=headers)
+
+    list_img_predictions = data_frame['fname'].tolist()
+    unique_classes = np.unique(data_frame['real values'].tolist())
+    print(unique_classes)
+    original_names = [f for f in list_img_predictions if 'converted' not in f]
+    original_names = [f for f in original_names if 'reconverted' not in f]
+    #for j, row in enumerate(data_frame.iterrows()):
+    #    if 'reconverted' in row['fname']:
+    #        print(j, row)
+
+    if gt_file:
+        df_gt = pd.read_csv(gt_file)
+        list_gt_images = df_gt['image_name'].tolist()
+        img_type_gt_images = df_gt['imaging type'].tolist()
+
+    for i, image_name in enumerate(tqdm.tqdm(original_names[:], desc='Arranging data')):
+        indexs = [list_img_predictions.index(name) for name in list_img_predictions if image_name.replace('.png', '') in name]
+        if image_name in list_gt_images:
+            index_gt = list_gt_images.index(image_name)
+            imaging_type = img_type_gt_images[index_gt]
+        else:
+            imaging_type = None
+        data_original = data_frame.iloc[indexs[0]]
+        data_converted = data_frame.iloc[indexs[1]]
+        data_reconverted = data_frame.iloc[indexs[2]]
+        predictions_original = [data_original['class_1'], data_original['class_2'], data_original['class_3'], data_original['class_4'], data_original['class_5']]
+        predictions_converted = [data_converted['class_1'], data_converted['class_2'], data_converted['class_3'], data_converted['class_4'], data_converted['class_5']]
+        predictions_reconverted = [data_reconverted['class_1'], data_reconverted['class_2'], data_reconverted['class_3'], data_reconverted['class_4'], data_reconverted['class_5']]
+
+        average = (np.array(predictions_original) + np.array(predictions_converted) + np.array(predictions_reconverted))/5.
+        weighted = (np.array(predictions_original)*0.6 + np.array(predictions_converted)*0.2 + np.array(predictions_reconverted)*0.2)
+        index_average = list(average).index(np.max(average))
+        index_weighted = list(weighted).index(np.max(weighted))
+        if unique_classes[index_average] != classes[index_average]:
+            print('average:', unique_classes[index_average], classes[index_average])
+        if unique_classes[index_weighted] != classes[index_weighted]:
+            print('weighted:', unique_classes[index_weighted], classes[index_weighted])
+
+        # Add the information to the new data-frame according to the previous information
+        new_row = pd.Series(data={'fname': data_original['fname'], 'class_1': data_original['class_1'], 'class_2': data_original['class_2'],
+                                  'class_3': data_original['class_3'], 'class_4': data_original['class_4'], 'class_5': data_original['class_5'],
+                                  'prediction original': data_original['over all'],
+                                  'converted': data_converted['fname'], 'class_1_C': data_converted['class_1'], 'class_2_C': data_converted['class_2'],
+                                  'class_3_C': data_converted['class_3'], 'class_4_C': data_converted['class_4'], 'class_5_C': data_converted['class_5'],
+                                  'prediction converted': data_converted['over all'],
+                                  're-converted': data_reconverted['fname'], 'class_1_R': data_reconverted['class_1'], 'class_2_R': data_reconverted['class_2'],
+                                  'class_3_R': data_reconverted['class_3'], 'class_4_R': data_reconverted['class_4'], 'class_5_R': data_reconverted['class_5'],
+                                  'prediction reconverted': data_reconverted['over all'],
+                                  'original imaging': imaging_type,
+                                  'average prediction': unique_classes[index_average],
+                                  'weighted prediction': unique_classes[index_weighted],
+                                  'real class': data_original['real values']})
+
+        #df_marks = df_marks.append(new_row, ignore_index=False)
+        new_df.loc[i] = new_row
+
+    if output_dir is None:
+        destination_dir = os.path.split(csv_file_dir)[0]
+
+    output_csv_file_dir = destination_dir + '/predictions_summarized.csv'
+    new_df.to_csv(output_csv_file_dir, index=False)
+    print(new_df)
+    print(f'File saved at:{output_csv_file_dir}')
 
 def merge_continuous_frames_results(csv_file_dir):
     print(csv_file_dir)
