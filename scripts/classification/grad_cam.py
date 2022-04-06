@@ -177,7 +177,7 @@ def generate_heat_map_and_mask(heatmap, img, img_size):
     if np.isnan(np.sum(np.unique(mask_heatmap))):
         mask_heatmap = np.zeros(img_size)
     else:
-        limit = 0.65 * np.amax(mask_heatmap)
+        limit = 0.7 * np.amax(mask_heatmap)
         mask_heatmap[mask_heatmap >= limit] = 1
         mask_heatmap[mask_heatmap < limit] = 0
 
@@ -290,7 +290,7 @@ def analyze_data_gradcam(name_model, dataset_dir, dataset_to_analyze, output_dir
 
         for folder in test_dataset:
             dir_folder = ''.join([dataset_to_analyze, folder, '/'])
-            imgs_subdir = [dir_folder + f for f in os.listdir(dir_folder) if f.endswith('.png')]
+            imgs_subdir = [dir_folder + f for f in os.listdir(dir_folder) if f.endswith('.png') or f.endswith('.jpg')]
             list_imgs = list_imgs + imgs_subdir
 
         for i, img_path in enumerate(tqdm.tqdm(list_imgs, desc=f'Making mask predictions, {len(list_imgs)} images')):
@@ -301,6 +301,7 @@ def analyze_data_gradcam(name_model, dataset_dir, dataset_to_analyze, output_dir
             img_name = os.path.split(img_path)[-1]
             img = tf.keras.preprocessing.image.load_img(img_path)
             img = tf.keras.preprocessing.image.img_to_array(img)
+            img = tf.keras.preprocessing.image.smart_resize(img, img_size, interpolation='bilinear')
 
             test_img = cv2.imread(img_path)
             test_img = cv2.cvtColor(test_img, cv2.COLOR_BGR2RGB)
@@ -308,7 +309,6 @@ def analyze_data_gradcam(name_model, dataset_dir, dataset_to_analyze, output_dir
 
             heatmap = gc.make_gradcam_heatmap(img_array, last_conv_layer_model, classifier_model)
             superimposed_img, mask_heatmap, binary_mask = generate_heat_map_and_mask(heatmap, img, img_size)
-
             if save_results is True:
                 cv2.imwrite(binary_masks_dir + img_name, binary_mask)
                 superimposed_img.save(heat_maps_dir + img_name)
@@ -420,7 +420,6 @@ def analyze_data_gradcam(name_model, dataset_dir, dataset_to_analyze, output_dir
                 prediction = model.predict(img_array, verbose=True)
                 heatmap = gc.make_gradcam_heatmap(img_array, last_conv_layer_model, classifier_model)
                 superimposed_img, mask_heatmap, binary_mask = generate_heat_map_and_mask(heatmap, img, img_size)
-                print(prediction)
                 open_cv_image = np.array(superimposed_img)
                 # Convert RGB to BGR
                 open_cv_image = open_cv_image[:, :, ::-1].copy()
