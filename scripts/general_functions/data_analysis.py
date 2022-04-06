@@ -28,8 +28,24 @@ from sklearn.metrics import auc
 from sklearn.metrics import confusion_matrix
 import copy
 import collections
-#from pandas_ml import ConfusionMatrix
 
+
+def _check_ext(path, default_ext):
+    name, ext = os.path.splitext(path)
+    if ext == '':
+        if default_ext[0] == '.':
+            default_ext = default_ext[1:]
+        path = name + '.' + default_ext
+    return path
+
+
+def save_yaml(path, data, **kwargs):
+
+    import oyaml as yaml
+    path = _check_ext(path, 'yml')
+
+    with open(path, 'w') as f:
+        yaml.dump(data, f, **kwargs)
 
 def convert_categorical_str_to_numerical(category_list):
     """
@@ -716,6 +732,7 @@ def plot_training_history(list_csv_files, save_dir=''):
 
     """
     if len(list_csv_files) > 1:
+        print(list_csv_files[0])
         fine_tune_history = pd.read_csv(list_csv_files[0])
         fine_tune_lim = fine_tune_history['epoch'].tolist()[-1]
         header_1 = fine_tune_history.columns.values.tolist()
@@ -888,7 +905,7 @@ def compute_confusion_matrix(gt_data, predicted_data, plot_figure=False, dir_sav
     return conf_matrix
 
 
-def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figure=False, dir_save_fig='',
+def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figure=False, dir_save_figs=None,
                                   analyze_training_history=False):
     """
     Analyze the results of a multi-class classification experiment
@@ -905,11 +922,17 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
     History plot, Confusion Matrix
 
     """
+    wli_imgs = []
+    nbi_imgs = []
+    predictions_nbi = []
+    predictions_wli = []
+    wli_tissue_types = []
+    nbi_tissue_types = []
 
     list_prediction_files = [f for f in os.listdir(predictions_data_dir) if 'predictions' in f and '(_pre' not in f]
     file_predictiosn = list_prediction_files.pop()
     path_file_predictions = predictions_data_dir + file_predictiosn
-    print(f'file predictions: {file_predictiosn}')
+    print(f'file predictions found: {file_predictiosn}')
 
     df_ground_truth = pd.read_csv(gt_data_file)
     df_preditc_data = pd.read_csv(path_file_predictions)
@@ -919,6 +942,7 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
 
     gt_names = df_ground_truth['image_name'].tolist()
     gt_vals = df_ground_truth['tissue type'].tolist()
+    imaging_type = df_ground_truth['imaging type'].tolist()
 
     existing_gt_vals = list()
     ordered_predictiosn = list()
@@ -929,7 +953,52 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
             index_gt = gt_names.index(name)
             existing_gt_vals.append(gt_vals[index_gt])
 
-    compute_confusion_matrix(existing_gt_vals, ordered_predictiosn, plot_figure=False, dir_save_fig=predictions_data_dir)
+            if imaging_type[index_gt] == 'NBI':
+                nbi_imgs.append(name)
+                predictions_nbi.append(predictions_vals[index])
+                nbi_tissue_types.append(gt_vals[index_gt])
+            if imaging_type[index_gt] == 'WLI':
+                wli_imgs.append(name)
+                predictions_wli.append(predictions_vals[index])
+                wli_tissue_types.append(gt_vals[index_gt])
+
+    # dri to save the figures
+    if dir_save_figs:
+        dir_save_fig = dir_save_figs
+    else:
+        dir_save_fig = predictions_data_dir
+
+
+    data_yaml = {'Accuracy ALL ': float(accuracy_score(existing_gt_vals, ordered_predictiosn)),
+                 'Accuracy WLI ': float(accuracy_score(wli_tissue_types, predictions_wli)),
+                 'Accuracy NBI ': float(accuracy_score(nbi_tissue_types, predictions_nbi))
+    }
+
+    # ACCURACY
+    print('Accuracy ALL: ', accuracy_score(existing_gt_vals, ordered_predictiosn))
+    print('Accuracy WLI: ', accuracy_score(wli_tissue_types, predictions_wli))
+    print('Accuracy NBI: ', accuracy_score(nbi_tissue_types, predictions_nbi))
+    # Precision
+    print('Precision ALL: ', precision_score(existing_gt_vals, ordered_predictiosn, average=None))
+    print('Precision WLI: ', precision_score(wli_tissue_types, predictions_wli, average=None))
+    print('Precision NBI: ', precision_score(nbi_tissue_types, predictions_nbi, average=None, zero_division=1))
+    # Recall
+    print('Recall ALL: ', recall_score(existing_gt_vals, ordered_predictiosn, average=None))
+    print('Recall WLI: ', recall_score(wli_tissue_types, predictions_wli, average=None))
+    print('Recall NBI: ', recall_score(nbi_tissue_types, predictions_nbi, average=None, zero_division=1))
+
+    # Confusion Matrices
+    compute_confusion_matrix(existing_gt_vals, ordered_predictiosn, plot_figure=False,
+                             dir_save_fig=dir_save_fig + 'confusion_matrix_all.png')
+
+    compute_confusion_matrix(wli_tissue_types, predictions_wli,
+                             dir_save_fig=dir_save_fig + 'confusion_matrix_wli.png')
+
+    compute_confusion_matrix(nbi_tissue_types, predictions_nbi,
+                             dir_save_fig=dir_save_fig + 'confusion_matrix_nbi.png')
+
+    dir_data_yaml = dir_save_fig + 'performance_analysis.yaml'
+    save_yaml(dir_data_yaml, data_yaml)
 
     gt_values = []
     for name in predictions_names:
@@ -944,16 +1013,19 @@ def analyze_multiclass_experiment(gt_data_file, predictions_data_dir, plot_figur
     new_df.to_csv(name_data_save, index=False)
     print(f'results saved at {name_data_save}')
 
+    # analyze the history
     if analyze_training_history is True:
         list_history_files = [f for f in os.listdir(predictions_data_dir) if 'train_history' in f]
         ordered_history = list()
         fine_tune_file = [f for f in list_history_files if 'fine_tune' in f]
         if fine_tune_file:
             fine_tune_file_dir = predictions_data_dir + fine_tune_file.pop()
-            ordered_history.append(fine_tune_file)
+            ordered_history.append(fine_tune_file_dir)
 
         ordered_history.append(predictions_data_dir + list_history_files[-1])
-        plot_training_history(ordered_history, save_dir=predictions_data_dir)
+        plot_training_history(ordered_history, save_dir=dir_save_fig)
+
+
 
 
 def compare_experiments(dir_folder_experiments, selection_criteria=['evaluation_results_test_0'], dir_save_results='',
@@ -1274,7 +1346,7 @@ def naive_ensembles(file_1, file_2):
 
 
 def analyze_simple_gan_results(csv_file_path):
-
+    print(csv_file_path)
     df_preditc_data = pd.read_csv(csv_file_path)
 
     predictions_names = df_preditc_data['fname'].tolist()
@@ -1282,24 +1354,170 @@ def analyze_simple_gan_results(csv_file_path):
 
     predictions_original = df_preditc_data['prediction original'].tolist()
     predictions_converted = df_preditc_data['prediction converted'].tolist()
-    predictions_reconverted = df_preditc_data['prediction original'].tolist()
+    predictions_reconverted = df_preditc_data['prediction reconverted'].tolist()
     predictions_average = df_preditc_data['average prediction'].tolist()
     predictions_weighted = df_preditc_data['weighted prediction'].tolist()
+    imaging_type = df_preditc_data['original imaging'].tolist()
 
     output_images_dir = os.path.split(csv_file_path)[0]
 
+    predictions_original_nbi = []
+    predictions_original_wli = []
+
+    predictions_converted_nbi = []
+    predictions_converted_wli = []
+
+    predictions_reconverted_nbi = []
+    predictions_reconverted_wli = []
+
+    predictions_average_nbi = []
+    predictions_average_wli = []
+
+    predictions_weighted_nbi = []
+    predictions_weighted_wli = []
+
+    wli_tissue_types = []
+    nbi_tissue_types = []
+
+    for name in predictions_names:
+
+        index = predictions_names.index(name)
+        if imaging_type[index] == 'NBI':
+            nbi_tissue_types.append(real_values[index])
+            predictions_original_nbi.append(predictions_original[index])
+            predictions_converted_nbi.append(predictions_converted[index])
+            predictions_reconverted_nbi.append(predictions_reconverted[index])
+            predictions_average_nbi.append(predictions_average[index])
+            predictions_weighted_nbi.append(predictions_weighted[index])
+
+        if imaging_type[index] == 'WLI':
+            wli_tissue_types.append(real_values[index])
+            predictions_original_wli.append(predictions_original[index])
+            predictions_converted_wli.append(predictions_converted[index])
+            predictions_reconverted_wli.append(predictions_reconverted[index])
+            predictions_average_wli.append(predictions_average[index])
+            predictions_weighted_wli.append(predictions_weighted[index])
+
+    data_yaml = {'Accuracy ALL ORIGINAL imgs': float(accuracy_score(real_values, predictions_original)),
+    'Accuracy WLI ORIGINAL imgs': float(accuracy_score(wli_tissue_types, predictions_original_wli)),
+    'Accuracy NBI ORIGINAL imgs': float(accuracy_score(nbi_tissue_types, predictions_original_nbi)),
+    'Accuracy ALL CONVERTED imgs': float(accuracy_score(real_values, predictions_converted)),
+    'Accuracy WLI CONVERTED imgs': float(accuracy_score(wli_tissue_types, predictions_converted_wli)),
+    'Accuracy NBI CONVERTED imgs': float(accuracy_score(nbi_tissue_types, predictions_converted_nbi)),
+    'Accuracy ALL RE-CONVERTED imgs': float(accuracy_score(real_values, predictions_reconverted)),
+    'Accuracy WLI RE-CONVERTED imgs': float(accuracy_score(wli_tissue_types, predictions_reconverted_wli)),
+    'Accuracy NBI RE-CONVERTED imgs': float(accuracy_score(nbi_tissue_types, predictions_reconverted_nbi)),
+    'Accuracy ALL AVERAGE imgs': float(accuracy_score(real_values, predictions_average)),
+    'Accuracy WLI AVERAGE imgs': float(accuracy_score(wli_tissue_types, predictions_average_wli)),
+    'Accuracy NBI AVERAGE imgs': float(accuracy_score(nbi_tissue_types, predictions_average_nbi)),
+    'Accuracy ALL WEIGHTED imgs': float(accuracy_score(real_values, predictions_weighted)),
+    'Accuracy WLI WEIGHTED imgs': float(accuracy_score(wli_tissue_types, predictions_weighted_wli)),
+    'Accuracy NBI WEIGHTED imgs': float(accuracy_score(nbi_tissue_types, predictions_weighted_nbi)),
+                 }
+    # Accuracy
+    print('Accuracy ALL ORIGINAL Images: ', accuracy_score(real_values, predictions_original))
+    print('Accuracy WLI ORIGINAL imgs: ', accuracy_score(wli_tissue_types, predictions_original_wli))
+    print('Accuracy NBI ORIGINAL imgs: ', accuracy_score(nbi_tissue_types, predictions_original_nbi))
+    print('Accuracy ALL CONVERTED Images: ', accuracy_score(real_values, predictions_converted))
+    print('Accuracy WLI CONVERTED imgs: ', accuracy_score(wli_tissue_types, predictions_converted_wli))
+    print('Accuracy NBI CONVERTED imgs: ', accuracy_score(nbi_tissue_types, predictions_converted_nbi))
+    print('Accuracy ALL RE-CONVERTED Images: ', accuracy_score(real_values, predictions_reconverted))
+    print('Accuracy WLI RE-CONVERTED imgs: ', accuracy_score(wli_tissue_types, predictions_reconverted_wli))
+    print('Accuracy NBI RE-CONVERTED imgs: ', accuracy_score(nbi_tissue_types, predictions_reconverted_nbi))
+    print('Accuracy ALL AVERAGE Images: ', accuracy_score(real_values, predictions_average))
+    print('Accuracy WLI AVERAGE imgs: ', accuracy_score(wli_tissue_types, predictions_average_wli))
+    print('Accuracy NBI AVERAGE imgs: ', accuracy_score(nbi_tissue_types, predictions_average_nbi))
+    print('Accuracy ALL WEIGHTED Images: ', accuracy_score(real_values, predictions_weighted))
+    print('Accuracy WLI WEIGHTED imgs: ', accuracy_score(wli_tissue_types, predictions_weighted_wli))
+    print('Accuracy NBI WEIGHTED imgs: ', accuracy_score(nbi_tissue_types, predictions_weighted_nbi))
+
+    # Precision
+    print('Precision all ORIGINAL Images: ', precision_score(real_values, predictions_original, average=None))
+    print('Precision WLI ORIGINAL imgs: ', precision_score(wli_tissue_types, predictions_original_wli, average=None))
+    print('Precision NBI ORIGINAL imgs: ',
+          precision_score(nbi_tissue_types, predictions_original_nbi, average=None, zero_division=1))
+    print('Precision all CONVERTED Images: ', precision_score(real_values, predictions_converted, average=None))
+    print('Precision WLI CONVERTED imgs: ', precision_score(wli_tissue_types, predictions_converted_wli, average=None))
+    print('Precision NBI CONVERTED imgs: ',
+          precision_score(nbi_tissue_types, predictions_converted_nbi, average=None, zero_division=1))
+    print('Precision all RE-CONVERTED Images: ', precision_score(real_values, predictions_reconverted, average=None))
+    print('Precision WLI RE-CONVERTED imgs: ',
+          precision_score(wli_tissue_types, predictions_reconverted_wli, average=None))
+    print('Precision NBI RE-CONVERTED imgs: ',
+          precision_score(nbi_tissue_types, predictions_reconverted_nbi, average=None, zero_division=1))
+    print('Precision all AVERAGE Images: ', precision_score(real_values, predictions_average, average=None))
+    print('Precision WLI AVERAGE imgs: ', precision_score(wli_tissue_types, predictions_average_wli, average=None))
+    print('Precision NBI AVERAGE imgs: ',
+          precision_score(nbi_tissue_types, predictions_average_nbi, average=None, zero_division=1))
+    print('Precision all WEIGHTED Images: ', precision_score(real_values, predictions_weighted, average=None))
+    print('Precision WLI WEIGHTED imgs: ', precision_score(wli_tissue_types, predictions_weighted_wli, average=None))
+    print('Precision NBI WEIGHTED imgs: ',
+          precision_score(nbi_tissue_types, predictions_weighted_nbi, average=None, zero_division=1))
+
+    # Recall
+    print('Recall all ORIGINAL images: ', recall_score(real_values, predictions_original, average=None))
+    print('Recall WLI ORIGINAL imgs: ', recall_score(wli_tissue_types, predictions_original_wli, average=None))
+    print('Recall NBI ORIGINAL imgs: ',
+          recall_score(nbi_tissue_types, predictions_original_nbi, average=None, zero_division=1))
+    print('Recall all CONVERTED images: ', recall_score(real_values, predictions_converted, average=None))
+    print('Recall WLI CONVERTED imgs: ', recall_score(wli_tissue_types, predictions_converted_wli, average=None))
+    print('Recall NBI CONVERTED imgs: ',
+          recall_score(nbi_tissue_types, predictions_converted_nbi, average=None, zero_division=1))
+    print('Recall all RE-CONVERTED images: ', recall_score(real_values, predictions_reconverted, average=None))
+    print('Recall WLI RE-CONVERTED imgs: ', recall_score(wli_tissue_types, predictions_reconverted_wli, average=None))
+    print('Recall NBI RE-CONVERTED imgs: ',
+          recall_score(nbi_tissue_types, predictions_reconverted_nbi, average=None, zero_division=1))
+    print('Recall all AVERAGE images: ', recall_score(real_values, predictions_average, average=None))
+    print('Recall WLI AVERAGE imgs: ', recall_score(wli_tissue_types, predictions_average_wli, average=None))
+    print('Recall NBI AVERAGE imgs: ',
+          recall_score(nbi_tissue_types, predictions_average_nbi, average=None, zero_division=1))
+    print('Recall all WEIGHTED images: ', recall_score(real_values, predictions_weighted, average=None))
+    print('Recall WLI WEIGHTED imgs: ', recall_score(wli_tissue_types, predictions_weighted_wli, average=None))
+    print('Recall NBI WEIGHTED imgs: ',
+          recall_score(nbi_tissue_types, predictions_weighted_nbi, average=None, zero_division=1))
+
+    # Confusion Matrices
+    # Original Images
     compute_confusion_matrix(real_values, predictions_original, plot_figure=False,
                              dir_save_fig=output_images_dir + '/original_images_all_confusion_matrix.png')
+    compute_confusion_matrix(wli_tissue_types, predictions_original_wli,
+                             dir_save_fig=output_images_dir + '/original_images_WLI_confusion_matrix.png')
+    compute_confusion_matrix(nbi_tissue_types, predictions_original_nbi,
+                             dir_save_fig=output_images_dir + '/original_images_NBI_confusion_matrix.png')
+
+    # Converted Images
     compute_confusion_matrix(real_values, predictions_converted, plot_figure=False,
                              dir_save_fig=output_images_dir + '/converted_images_all_confusion_matrix.png')
+    compute_confusion_matrix(wli_tissue_types, predictions_converted_wli,
+                             dir_save_fig=output_images_dir + '/converted_images_WLI_confusion_matrix.png')
+    compute_confusion_matrix(nbi_tissue_types, predictions_converted_nbi,
+                             dir_save_fig=output_images_dir + '/converted_images_NBI_confusion_matrix.png')
+
+    # Re-converted Images
     compute_confusion_matrix(real_values, predictions_reconverted, plot_figure=False,
                              dir_save_fig=output_images_dir + '/reconverted_images_all_confusion_matrix.png')
+    compute_confusion_matrix(wli_tissue_types, predictions_reconverted_wli,
+                             dir_save_fig=output_images_dir + '/reconverted_images_WLI_confusion_matrix.png')
+    compute_confusion_matrix(nbi_tissue_types, predictions_reconverted_nbi,
+                             dir_save_fig=output_images_dir + '/reconverted_images_NBI_confusion_matrix.png')
+
+    # Average
     compute_confusion_matrix(real_values, predictions_average, plot_figure=False,
                              dir_save_fig=output_images_dir + '/average_images_all_confusion_matrix.png')
+    compute_confusion_matrix(wli_tissue_types, predictions_average_wli,
+                             dir_save_fig=output_images_dir + '/average_images_WLI_confusion_matrix.png')
+    compute_confusion_matrix(nbi_tissue_types, predictions_average_nbi,
+                             dir_save_fig=output_images_dir + '/average_images_NBI_confusion_matrix.png')
+
+    # Weighted
     compute_confusion_matrix(real_values, predictions_weighted, plot_figure=False,
                              dir_save_fig=output_images_dir + '/weighted_images_all_confusion_matrix.png')
-
-
+    compute_confusion_matrix(wli_tissue_types, predictions_weighted_wli,
+                             dir_save_fig=output_images_dir + '/weighted_images_WLI_confusion_matrix.png')
+    compute_confusion_matrix(nbi_tissue_types, predictions_weighted_nbi,
+                             dir_save_fig=output_images_dir + '/weighted_images_NBI_confusion_matrix.png')
+    path_yaml = output_images_dir + '/performance_analysis.yalm'
+    save_yaml(path_yaml, data_yaml)
 
 
 def merge_reconstructed_gan_results(csv_file_dir, output_dir=None, gt_file=None):
@@ -1340,8 +1558,14 @@ def merge_reconstructed_gan_results(csv_file_dir, output_dir=None, gt_file=None)
     headers.append('real class')
     new_df = pd.DataFrame(columns=headers)
 
+    if gt_file:
+        df_gt = pd.read_csv(gt_file)
+        list_gt_images = df_gt['image_name'].tolist()
+        img_type_gt_images = df_gt['imaging type'].tolist()
+        list_real_values = df_gt['tissue type'].tolist()
+        unique_classes = np.unique(list_real_values)
+
     list_img_predictions = data_frame['fname'].tolist()
-    unique_classes = np.unique(data_frame['real values'].tolist())
     print(unique_classes)
     original_names = [f for f in list_img_predictions if 'converted' not in f]
     original_names = [f for f in original_names if 'reconverted' not in f]
@@ -1349,18 +1573,15 @@ def merge_reconstructed_gan_results(csv_file_dir, output_dir=None, gt_file=None)
     #    if 'reconverted' in row['fname']:
     #        print(j, row)
 
-    if gt_file:
-        df_gt = pd.read_csv(gt_file)
-        list_gt_images = df_gt['image_name'].tolist()
-        img_type_gt_images = df_gt['imaging type'].tolist()
-
     for i, image_name in enumerate(tqdm.tqdm(original_names[:], desc='Arranging data')):
         indexs = [list_img_predictions.index(name) for name in list_img_predictions if image_name.replace('.png', '') in name]
         if image_name in list_gt_images:
             index_gt = list_gt_images.index(image_name)
             imaging_type = img_type_gt_images[index_gt]
+            real_value_class = list_real_values[index_gt]
         else:
             imaging_type = None
+            real_value_class = None
         data_original = data_frame.iloc[indexs[0]]
         data_converted = data_frame.iloc[indexs[1]]
         data_reconverted = data_frame.iloc[indexs[2]]
@@ -1390,7 +1611,7 @@ def merge_reconstructed_gan_results(csv_file_dir, output_dir=None, gt_file=None)
                                   'original imaging': imaging_type,
                                   'average prediction': unique_classes[index_average],
                                   'weighted prediction': unique_classes[index_weighted],
-                                  'real class': data_original['real values']})
+                                  'real class': real_value_class})
 
         #df_marks = df_marks.append(new_row, ignore_index=False)
         new_df.loc[i] = new_row
