@@ -1363,6 +1363,27 @@ def build_csv_from_other_csv(directory_files, csv_dir, output_csv_file_dir=''):
     print(f'File saved at:{output_csv_file_dir}')
 
 
+def copy_matching_string_data(matching_string, original_dir, destination_dir):
+    """
+    Given the directory to a dataset of images, if some name of the images matches a specified string, it copies all
+    the matching instances to the destination dir
+    Parameters
+    ----------
+    matching_string : (str)
+    original_dir : (str)
+    destination_dir : (str)
+
+    Returns
+    -------
+
+    """
+
+    list_imgs = [file for file in os.listdir(original_dir) if matching_string in file]
+
+    for i, file in enumerate(tqdm.tqdm(list_imgs[:], desc='Copying files')):
+        shutil.copy(original_dir + file, destination_dir + file)
+
+
 def merge_annotations_data(annotations_list, selected_elements=[], output_dir=''):
 
     data_frames = [[] for _ in range(len(annotations_list))]
