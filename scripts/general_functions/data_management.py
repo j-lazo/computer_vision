@@ -17,7 +17,6 @@ import tensorflow as tf
 #import skimage
 
 
-
 def crop_center_square(frame):
     y, x = frame.shape[0:2]
     min_dim = min(y, x)
@@ -1417,6 +1416,69 @@ def merge_annotations_data(annotations_list, selected_elements=[], output_dir=''
     else:
         save_dir = os.getcwd() + '/all_annotations.csv'
     df.to_csv(save_dir)
+
+
+def merge_multi_domain_data(directory_dataset, keywords=['converted', 'reconverted'], csv_annotations=None,
+                            output_dir=None, output_shape=(256,256), compress=False):
+    """
+
+    Parameters
+    ----------
+    directory_dataset :
+    keywords :
+    csv_annotations :
+    output_dir :
+
+    Returns
+    -------
+
+    """
+
+    list_img_files = os.listdir(directory_dataset)
+
+    if output_dir is None:
+        output_dir = directory_dataset
+
+    if csv_annotations:
+        df_gt = pd.read_csv(csv_annotations)
+        list_gt_images = df_gt['image_name'].tolist()
+        img_type_gt_images = df_gt['imaging type'].tolist()
+        list_real_values = df_gt['tissue type'].tolist()
+        unique_classes = np.unique(list_real_values)
+
+    original_names = copy.copy(list_img_files)
+
+    # eliminate images that have repeated names according to the matching keywords
+    for key_word in keywords:
+        original_names = [f for f in original_names if key_word not in f]
+
+    # iterate over each of the "base" names
+
+    for i, image_name in enumerate(tqdm.tqdm(original_names[:], desc='Arranging data')):
+        search_name = image_name[:-8]
+        transformation_id = image_name[-7:]
+        matching_names = list()
+        for name in list_img_files:
+            if search_name in name and transformation_id in name:
+                matching_names.append(name)
+
+            array_imgs = np.zeros((3, output_shape[0], output_shape[1], 3))
+
+        for j, img_name in enumerate(matching_names):
+            img = cv2.imread(directory_dataset + img_name)
+            resized_img = cv2.resize(img, output_shape, interpolation=cv2.INTER_AREA)
+            array_imgs[j] = resized_img
+
+        if compress is False:
+            save_name = ''.join([search_name, '_', transformation_id.replace('.png', '.npy')])
+            save_dir_name = output_dir + save_name
+            np.save(save_dir_name, array_imgs)
+        else:
+            save_name = ''.join([search_name, '_', transformation_id.replace('.png', '.npz')])
+            save_dir_name = output_dir + save_name
+            np.savez_compressed(save_dir_name, array_imgs)
+
+    print(f'files saved at:{output_dir}')
 
 
 if __name__ == "__main__":
