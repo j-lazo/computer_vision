@@ -11,9 +11,11 @@ import random
 import colorsys
 from scipy.ndimage import zoom
 from PIL import Image
+import re
 
 from matplotlib import pyplot as plt
 import tensorflow as tf
+
 #import skimage
 
 
@@ -1456,23 +1458,35 @@ def merge_multi_domain_data(directory_dataset, keywords=['converted', 'reconvert
 
     for i, image_name in enumerate(tqdm.tqdm(original_names[:], desc='Arranging data')):
         search_name = image_name[:-8]
-        transformation_id = image_name[-7:]
+        #transformation_id = image_name[-7:]
+        transformation_id = re.findall(r"(\d+).png", image_name).pop() + '.png'
         matching_names = list()
         for name in list_img_files:
             if search_name in name and transformation_id in name:
                 matching_names.append(name)
+            array_imgs = np.zeros((3, output_shape[0], output_shape[1], 3)).astype(int)
 
-            array_imgs = np.zeros((3, output_shape[0], output_shape[1], 3))
+        ordered_matching_names = [f for f in matching_names if 'reconverted' in f]
+        matching_names.remove(ordered_matching_names[-1])
 
-        for j, img_name in enumerate(matching_names):
-            img = cv2.imread(directory_dataset + img_name)
-            resized_img = cv2.resize(img, output_shape, interpolation=cv2.INTER_AREA)
-            array_imgs[j] = resized_img
+        for k in matching_names:
+            if 'converted' in k:
+                ordered_matching_names.append(k)
+        for k in matching_names:
+            if k not in ordered_matching_names:
+                ordered_matching_names.append(k)
+
+        ordered_matching_names = list(reversed(ordered_matching_names))
+        for j, img_name in enumerate(ordered_matching_names):
+            img = tf.keras.utils.load_img(directory_dataset + img_name, target_size=output_shape, interpolation='bilinear')
+            img_array = tf.keras.utils.img_to_array(img).astype(int)
+            array_imgs[j] = img_array.astype(int)
 
         if compress is False:
             save_name = ''.join([search_name, '_', transformation_id.replace('.png', '.npy')])
             save_dir_name = output_dir + save_name
             np.save(save_dir_name, array_imgs)
+
         else:
             save_name = ''.join([search_name, '_', transformation_id.replace('.png', '.npz')])
             save_dir_name = output_dir + save_name
