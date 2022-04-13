@@ -1456,42 +1456,34 @@ def merge_multi_domain_data(directory_dataset, keywords=['converted', 'reconvert
         original_names = [f for f in original_names if key_word not in f]
 
     # iterate over each of the "base" names
-
     for i, image_name in enumerate(tqdm.tqdm(original_names[:], desc='Arranging data')):
         search_name = image_name[:-8]
-        #transformation_id = image_name[-7:]
         transformation_id = re.findall(r"(\d+).png", image_name).pop() + '.png'
         matching_names = list()
-        for name in list_img_files:
-            if search_name in name and transformation_id in name:
-                matching_names.append(name)
-            array_imgs = np.zeros((3, output_shape[0], output_shape[1], 3)).astype(int)
+        conv_name = ''.join([search_name, '_', 'converted__', transformation_id])
+        reconv_name = ''.join([search_name, '_', 'reconverted__', transformation_id])
 
-        ordered_matching_names = [f for f in matching_names if 'reconverted' in f]
-        matching_names.remove(ordered_matching_names[-1])
+        ordered_matching_names = [image_name]
+        if conv_name in list_img_files:
+            ordered_matching_names.append(conv_name)
+            if reconv_name in list_img_files:
+                ordered_matching_names.append(reconv_name)
+                array_imgs = np.zeros((3, output_shape[0], output_shape[1], 3)).astype(int)
+                for j, img_name in enumerate(ordered_matching_names):
+                    img = tf.keras.utils.load_img(directory_dataset + img_name, target_size=output_shape,
+                                                  interpolation='bilinear')
+                    img_array = tf.keras.utils.img_to_array(img).astype(int)
+                    array_imgs[j] = img_array.astype(int)
 
-        for k in matching_names:
-            if 'converted' in k:
-                ordered_matching_names.append(k)
-        for k in matching_names:
-            if k not in ordered_matching_names:
-                ordered_matching_names.append(k)
+                    if compress is False:
+                        save_name = ''.join([search_name, '_', transformation_id.replace('.png', '.npy')])
+                        save_dir_name = output_dir + save_name
+                        np.save(save_dir_name, array_imgs)
 
-        ordered_matching_names = list(reversed(ordered_matching_names))
-        for j, img_name in enumerate(ordered_matching_names):
-            img = tf.keras.utils.load_img(directory_dataset + img_name, target_size=output_shape, interpolation='bilinear')
-            img_array = tf.keras.utils.img_to_array(img).astype(int)
-            array_imgs[j] = img_array.astype(int)
-
-        if compress is False:
-            save_name = ''.join([search_name, '_', transformation_id.replace('.png', '.npy')])
-            save_dir_name = output_dir + save_name
-            np.save(save_dir_name, array_imgs)
-
-        else:
-            save_name = ''.join([search_name, '_', transformation_id.replace('.png', '.npz')])
-            save_dir_name = output_dir + save_name
-            np.savez_compressed(save_dir_name, array_imgs)
+                    else:
+                        save_name = ''.join([search_name, '_', transformation_id.replace('.png', '.npz')])
+                        save_dir_name = output_dir + save_name
+                        np.savez_compressed(save_dir_name, array_imgs)
 
     print(f'files saved at:{output_dir}')
 
