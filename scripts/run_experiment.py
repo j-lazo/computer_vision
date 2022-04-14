@@ -8,12 +8,15 @@ import cv2
 from classification import call_models as img_class
 from segmentation import call_models as segm
 from classification import grad_cam as gc
+from classification import call_models_tf as img_class_tf
+
 
 DATASETS = ['tissue_classification', 'kvasir_image_classification', 'bladder_tissue_classification',
             'bladder_tissue_classification_v2', 'bladder_tissue_classification_v2_augmented',
             'bladder_tissue_classification_gan', 'bladder_tissue_classification_gan_augmented',
             'bladder_tissue_classification_gan_original', 'bladder_tissue_classification_gan_converted',
-            'bladder_tissue_classification_gan_reconverted']
+            'bladder_tissue_classification_gan_reconverted', 'bladder_tissue_classification_npz',
+            'bladder_tissue_classification_npy']
 
 flags.DEFINE_string('experiment_type', '', 'experiment type')
 flags.DEFINE_string('name_model', 'fc_3layers', 'name of the model')
