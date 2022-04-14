@@ -12,6 +12,7 @@ from tensorflow.keras.layers import *
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
 from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
+import pandas as pd
 
 
 def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', backbone_model='',
@@ -66,7 +67,7 @@ def load_data_from_directory(path_data):
     list_files = os.listdir(path_data)
     list_unique_classes = np.unique([f for f in list_files if os.path.isdir(os.path.join(path_data, f))])
     for j, unique_class in enumerate(list_unique_classes):
-        path_images = ''.join([path_data, unique_class, '/*'])
+        path_images = ''.join([path_data, '/', unique_class, '/*'])
         added_images = sorted(glob(path_images))
         new_dictionary_labels = {image_name: unique_class for image_name in added_images}
 
@@ -74,6 +75,8 @@ def load_data_from_directory(path_data):
         added_labels = [j] * len(added_images)
         labels = labels + added_labels
         dictionary_labels = {**dictionary_labels, **new_dictionary_labels}
+
+    print(f'Found {len(images_path)} images corresponding to {len(list_unique_classes)} classes at: {path_data}')
 
     return images_path, labels, dictionary_labels
 
@@ -261,9 +264,16 @@ def load_pretrained_backbones(name_model, weights='imagenet', include_top=False,
         weights_dir = base_dir_weights + 'resnet101/resnet101_weights_tf_dim_ordering_tf_kernels_notop.h5'
         base_model = applications.resnet.ResNet101(include_top=include_top, weights=weights_dir)
         base_model.trainable = True
+        layer1 = base_model.layers[2]
+        global weights_1
+        weights_1 = layer1.weights
 
         new_base_model = tf.keras.models.clone_model(base_model)
         new_base_model.set_weights(base_model.get_weights())
+        layer2 = new_base_model.layers[2]
+        global weights_2
+        weights_2 = layer2.weights
+        print(np.array_equal(weights_1[0], weights_2[0]))
 
         #base_model.name = new_name
 
@@ -290,8 +300,10 @@ def load_pretrained_backbones(name_model, weights='imagenet', include_top=False,
     else:
         raise ValueError(f' MODEL: {name_model} not found')
 
-    print('PRETRAINED Model', new_base_model._name)
-
+    layer3 = new_base_model.layers[2]
+    global weights3
+    weights3 = layer3.weights
+    print(np.array_equal(weights3[0], weights_2[0]))
     return new_base_model
 
 
@@ -323,12 +335,25 @@ def build_model():
     backbone_model_1._name = 'backbone_1'
     for layer in backbone_model_1.layers:
         layer.trainable = False
+
     backbone_model_2._name = 'backbone_2'
     for layer in backbone_model_2.layers:
         layer.trainable = False
     backbone_model_3._name = 'backbone_3'
     for layer in backbone_model_3.layers:
         layer.trainable = False
+
+    """layer4 = backbone_model_1.layers[2]
+    weights4 = layer4.weights
+    print(np.array_equal(weights4[0], weights3[0]))
+
+    layer5 = backbone_model_2.layers[2]
+    weights5 = layer5.weights
+    print(np.array_equal(weights4[0], weights5[0]))
+
+    layer6 = backbone_model_3.layers[2]
+    weights6 = layer6.weights
+    print(np.array_equal(weights5[0], weights6[0]))"""
 
     b1 = backbone_model_1(b1)
     b2 = backbone_model_2(b2)
@@ -337,15 +362,15 @@ def build_model():
     x = Concatenate()([b1, b2, b3])
     x = GlobalAveragePooling2D()(x)
     x = Dense(512, activation='relu')(x)
-    x = Dropout(0.5)(x)
+    #x = Dropout(0.5)(x)
     x = Dense(1024, activation='relu')(x)
-    x = Dropout(0.5)(x)
+    #x = Dropout(0.5)(x)
     x = Dense(1024, activation='relu')(x)
     x = Flatten()(x)
     output_layer = Dense(5, activation='softmax')(x)
 
     ensemble = Model(inputs=input_model,
-                     outputs=output_layer, name='Ensemble_Classification')
+                     outputs=output_layer, name='Multi_Imaging_Classification')
 
     return ensemble
 
@@ -420,6 +445,91 @@ def build_model():
     return ensemble"""
 
 
+def evaluate_and_predict(model, directory_to_evaluate, results_directory,
+                         output_name='', results_id='', backbone_model='', batch_size=1,
+                         analyze_data=False, output_dir=''):
+    print(f'Evaluation of: {directory_to_evaluate}')
+
+    # load the data to evaluate and predict
+    data_gen, _ = load_data(directory_to_evaluate, backbone_model=backbone_model,
+                                  batch_size=13, prediction_mode=True)
+
+    evaluation = model.evaluate(data_gen, verbose=True)
+    print('Evaluation results:')
+    print(evaluation)
+    predictions = model.predict(data_gen, verbose=True)
+
+    # determine the top-1 prediction class
+    predicts = np.argmax(predictions, axis=1)
+
+    x_p = x_p = [[] for _ in range(len(np.unique(predicts)))]
+    for x in predictions:
+        for i in range(len(np.unique(predicts))):
+            x_p[i].append(x[i])
+
+    label_index = {v: k for k, v in data_gen.class_indices.items()}
+    predicts = [label_index[p] for p in predicts]
+    header_column = ['class_' + str(i+1) for i in range(len(np.unique(predicts)))]
+    header_column.insert(0, 'fname')
+    header_column.append('over all')
+    df = pd.DataFrame(columns=header_column)
+    df['fname'] = [os.path.basename(x) for x in data_gen.filenames]
+
+    for i in range(len(np.unique(predicts))):
+        class_name = 'class_' + str(i+1)
+        df[class_name] = x_p[i]
+
+    df['over all'] = predicts
+    # save the predictions  of each case
+    results_csv_file = ''.join([results_directory, 'predictions_', output_name, '_', results_id, '_.csv'])
+    df.to_csv(results_csv_file, index=False)
+
+    if analyze_data is True:
+        list_files = [f for f in os.listdir(directory_to_evaluate) if f.endswith('.csv')]
+        if list_files:
+            annotations_csv_data = list_files.pop()
+            dir_annotations_csv = directory_to_evaluate + annotations_csv_data
+
+            if len(np.unique(predicts)) == 2:
+                auc = daa.calculate_auc_and_roc(results_csv_file, dir_annotations_csv, output_name, plot=False,
+                                                results_directory=results_directory, results_id=results_id, save_plot=True)
+                print(f'AUC: {auc}')
+        else:
+            print(f'No annotation file found in {directory_to_evaluate}')
+
+    return results_csv_file
+
+
+def evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model, analyze_data=True):
+
+    # determine if there are sub_folders or if it's the absolute path of the dataset
+    sub_dirs = [f for f in os.listdir(test_data) if os.path.isdir(test_data + f)]
+    if sub_dirs:
+        for sub_dir in sub_dirs:
+            sub_sub_dirs = [f for f in os.listdir(test_data + sub_dir) if
+                            os.path.isdir(''.join([test_data, sub_dir, '/', f]))]
+            if sub_sub_dirs:
+                print(f'Sub-directories:{sub_dirs} found in {test_data}')
+                # this means that inside each sub-dir there is more directories so we can iterate over the previous one
+                name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
+                                                 results_id=new_results_id, output_name=sub_dir,
+                                                 backbone_model=backbone_model, analyze_data=analyze_data)
+
+                print(f'Evaluation results saved at {name_file}')
+            else:
+                name_file = evaluate_and_predict(model, test_data, results_directory,
+                                                 results_id=new_results_id, output_name='test',
+                                                 backbone_model=backbone_model, analyze_data=analyze_data)
+                print(f'Evaluation results saved at {name_file}')
+                break
+
+    else:
+        name_file = evaluate_and_predict(model, test_data, results_directory,
+                                         results_id=new_results_id, output_name='test',
+                                         backbone_model=backbone_model, analyze_data=analyze_data)
+        print(f'Evaluation results saved at {name_file}')
+
+
 def compile_model(model, learning_rate, optimizer='adam', loss='categorical_crossentropy',
                 metrics=["accuracy", tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]):
 
@@ -434,30 +544,32 @@ def compile_model(model, learning_rate, optimizer='adam', loss='categorical_cros
     return model
 
 
-def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.001, results_dir=os.getcwd() + '/results/', backbone_model=None,
-              val_dataset=None, batch_size=8, buffer_size=50):
+def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_dir=os.getcwd() + '/results/', backbone_model=None,
+              val_dataset=None, eval_val_set=None, eval_train_set=False, test_data=None, batch_size=16, buffer_size=50):
     mode = 'fit'
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
     # Decide how to act according to the mode (train/predict/train-backbone... )
     files_dataset_directory = [f for f in os.listdir(dataset_dir)]
     if 'train' in files_dataset_directory:
         path_train_dataset = os.path.join(dataset_dir, 'train')
-
-        if 'val' in files_dataset_directory:
-            path_val_dataset = os.path.join(dataset_dir, 'val')
-        elif val_dataset:
-            path_val_dataset = val_dataset
-        else:
-            raise 'Validation directory not found'
-
     else:
         path_train_dataset = dataset_dir
+
+    if 'val' in files_dataset_directory:
+        path_val_dataset = os.path.join(dataset_dir, 'val')
+    elif val_dataset:
+        path_val_dataset = val_dataset
+    else:
+        raise 'Validation directory not found'
+
+    print(f'train directory found at: {path_train_dataset}')
+    print(f'validation directory found at: {path_train_dataset}')
 
     train_x, train_y, dictionary_train = load_data_from_directory(path_train_dataset)
     train_dataset = generate_tf_dataset(train_x, train_y, batch_size=batch_size, shuffle=True,
                                        buffer_size=buffer_size)
 
-    val_x, val_y, dictionary_val = load_data_from_directory(path_train_dataset)
+    val_x, val_y, dictionary_val = load_data_from_directory(path_val_dataset)
     val_dataset = generate_tf_dataset(val_x, val_y, batch_size=batch_size, shuffle=True,
                                        buffer_size=buffer_size)
 
@@ -499,6 +611,10 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.001, results_d
         CSVLogger(results_directory + 'train_history_' + new_results_id + "_.csv"),
         EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)]
 
+    # track time
+    start_time = datetime.datetime.now()
+    # Train the model
+
     trained_model = model.fit(train_dataset,
                               epochs=epochs,
                               shuffle=True,
@@ -508,6 +624,31 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.001, results_d
                               validation_steps=val_steps,
                               verbose=True,
                               callbacks=callbacks)
+
+    model.save(''.join([results_directory, 'model_', new_results_id]))
+
+    print('Total Training TIME:', (datetime.datetime.now() - start_time))
+    print('History Model Keys:')
+    print(trained_model.history.keys())
+    # in case evaluate val dataset is True
+    if eval_val_set is True:
+        evaluate_and_predict(model, val_dataset, results_directory,
+                             results_id=new_results_id, output_name='val',
+                             backbone_model=backbone_model)
+
+    if eval_train_set is True:
+        evaluate_and_predict(model, train_dataset, results_directory,
+                             results_id=new_results_id, output_name='train',
+                             backbone_model=backbone_model)
+
+    if 'test' in files_dataset_directory:
+        path_test_dataset = os.path.join(dataset_dir, 'test')
+        evalute_test_directory(model, path_test_dataset, results_directory, new_results_id, backbone_model,
+                               analyze_data=True)
+
+    if test_data != '':
+        evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model,
+                               analyze_data=True)
 
 
 def main(_argv):
@@ -525,7 +666,7 @@ def main(_argv):
         analyze_tf_dataset(test_dataset)
 
     elif mode == 'fit':
-        fit_model(train_dataset, val_dataset)
+        fit_model('initial_test', train_dataset, val_dataset=val_dataset)
         #fit_model(name_model, train_dataset, backbone_model, val_dataset=val_dataset, batch_size=batch_size,
         #          buffer_size=buffer_size)
 
