@@ -542,7 +542,7 @@ def evalute_test_directory(model, test_data, results_directory, new_results_id, 
     else:
         name_file = evaluate_and_predict(model, test_data, results_directory,
                                          results_id=new_results_id, output_name='test',
-                                         backbone_model=backbone_model, analyze_data=analyze_data)
+                                         analyze_data=analyze_data)
         print(f'Evaluation results saved at {name_file}')
 
 
