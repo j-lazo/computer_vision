@@ -464,7 +464,6 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 
     model.evaluate(test_dataset, steps=test_steps)
     inference_times = []
-    evaluation = model.evaluate(test_dataset, verbose=True)
     print('Evaluation results:')
     print(evaluation)
 
