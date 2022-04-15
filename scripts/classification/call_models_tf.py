@@ -677,12 +677,13 @@ def main(_argv):
     backbone_model = FLAGS.backbone
     batch_size = FLAGS.batch_size
     buffer_size = FLAGS.buffer_size
+    epochs = FLAGS.epochs
 
     if mode == 'analyze_dataset':
         analyze_tf_dataset(test_dataset)
 
     elif mode == 'fit':
-        fit_model('initial_test', train_dataset, val_dataset=val_dataset)
+        fit_model('initial_test', train_dataset, val_dataset=val_dataset, epochs=epochs)
         #fit_model(name_model, train_dataset, backbone_model, val_dataset=val_dataset, batch_size=batch_size,
         #          buffer_size=buffer_size)
 
