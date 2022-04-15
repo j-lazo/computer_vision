@@ -13,6 +13,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
 from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
 import pandas as pd
+import tqdm
+import time
 
 
 def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', backbone_model='',
@@ -81,7 +83,7 @@ def load_data_from_directory(path_data):
     return images_path, labels, dictionary_labels
 
 
-def read_stacked_images_npy(path_data, preprocessing_input=None):
+def read_stacked_images_npy(path_data):
     """
 
     Parameters
@@ -446,26 +448,40 @@ def build_model():
 
 
 def evaluate_and_predict(model, directory_to_evaluate, results_directory,
-                         output_name='', results_id='', backbone_model='', batch_size=1,
+                         output_name='', results_id='', batch_size=1,
                          analyze_data=False, output_dir=''):
     print(f'Evaluation of: {directory_to_evaluate}')
 
     # load the data to evaluate and predict
-    data_gen, _ = load_data(directory_to_evaluate, backbone_model=backbone_model,
-                                  batch_size=13, prediction_mode=True)
 
-    evaluation = model.evaluate(data_gen, verbose=True)
+    batch_size = 8
+    (test_x, test_y) = load_data_from_directory(directory_to_evaluate)
+    test_dataset = generate_tf_dataset(test_x, test_y, batch=batch_size)
+    test_steps = (len(test_x) // batch_size)
+
+    if len(test_x) % batch_size != 0:
+        test_steps += 1
+
+    model.evaluate(test_dataset, steps=test_steps)
+    inference_times = []
+    evaluation = model.evaluate(test_dataset, verbose=True)
     print('Evaluation results:')
     print(evaluation)
-    predictions = model.predict(data_gen, verbose=True)
 
-    # determine the top-1 prediction class
-    predicts = np.argmax(predictions, axis=1)
+    for i, (x, y) in tqdm.tqdm(enumerate(zip(test_x, test_y)), total=len(test_x)):
+        init_time = time.time()
+        x = read_stacked_images_npy(x)
+        x = np.expand_dims(x, axis=0)
+        y_pred = model.predict(x)
+        print(y_pred, y)
+        inference_times.append(time.time() - init_time)
+        # determine the top-1 prediction class
+        predicts = np.argmax(y_pred, axis=1)
 
-    x_p = x_p = [[] for _ in range(len(np.unique(predicts)))]
-    for x in predictions:
-        for i in range(len(np.unique(predicts))):
-            x_p[i].append(x[i])
+    print('End')
+    """    for x in predictions:
+            for i in range(len(np.unique(predicts))):
+                x_p[i].append(x[i])
 
     label_index = {v: k for k, v in data_gen.class_indices.items()}
     predicts = [label_index[p] for p in predicts]
@@ -497,7 +513,7 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
         else:
             print(f'No annotation file found in {directory_to_evaluate}')
 
-    return results_csv_file
+    return results_csv_file"""
 
 
 def evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model, analyze_data=True):
@@ -513,13 +529,13 @@ def evalute_test_directory(model, test_data, results_directory, new_results_id, 
                 # this means that inside each sub-dir there is more directories so we can iterate over the previous one
                 name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
                                                  results_id=new_results_id, output_name=sub_dir,
-                                                 backbone_model=backbone_model, analyze_data=analyze_data)
+                                                 analyze_data=analyze_data)
 
                 print(f'Evaluation results saved at {name_file}')
             else:
                 name_file = evaluate_and_predict(model, test_data, results_directory,
                                                  results_id=new_results_id, output_name='test',
-                                                 backbone_model=backbone_model, analyze_data=analyze_data)
+                                                 analyze_data=analyze_data)
                 print(f'Evaluation results saved at {name_file}')
                 break
 
@@ -647,7 +663,7 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
                                analyze_data=True)
 
     if test_data != '':
-        evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model,
+        evalute_test_directory(model, path_test_dataset, results_directory, new_results_id, backbone_model,
                                analyze_data=True)
 
 
