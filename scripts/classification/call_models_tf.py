@@ -455,8 +455,8 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     # load the data to evaluate and predict
 
     batch_size = 8
-    (test_x, test_y) = load_data_from_directory(directory_to_evaluate)
-    test_dataset = generate_tf_dataset(test_x, test_y, batch=batch_size)
+    test_x, test_y, dataset_dictionary = load_data_from_directory(directory_to_evaluate)
+    test_dataset = generate_tf_dataset(test_x, test_y, batch_size=batch_size)
     test_steps = (len(test_x) // batch_size)
 
     if len(test_x) % batch_size != 0:
@@ -659,9 +659,14 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
 
     if 'test' in files_dataset_directory:
         path_test_dataset = os.path.join(dataset_dir, 'test')
-        evalute_test_directory(model, path_test_dataset, results_directory, new_results_id, backbone_model,
-                               analyze_data=True)
-
+        list_sub_dirs = os.listdir(path_test_dataset)
+        if list_sub_dirs:
+            for folder in list_sub_dirs:
+                sub_path_test_dataset = os.path.join(path_test_dataset, folder)
+                evalute_test_directory(model, sub_path_test_dataset + '/', results_directory, new_results_id, backbone_model, analyze_data=True)
+        else:
+            evalute_test_directory(model, path_test_dataset, results_directory, new_results_id, backbone_model,
+                                   analyze_data=True)
     if test_data != '':
         evalute_test_directory(model, path_test_dataset, results_directory, new_results_id, backbone_model,
                                analyze_data=True)
