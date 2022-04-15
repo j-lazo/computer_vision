@@ -109,7 +109,7 @@ def read_stacked_images_npy(path_data):
 def tf_parser_npy(x, y):
 
     def _parse(x, y):
-        x = read_stacked_images_npy(x, preprocessing_input=PREPROCESS_FUNCTION)
+        x = read_stacked_images_npy(x)
         out_y = np.zeros(NUM_CLASSES)
         out_y[y] = 1.
         out_y[y] = out_y[y].astype(np.float64)
