@@ -106,6 +106,27 @@ def read_stacked_images_npy(path_data):
     return img
 
 
+def read_stacked_images_npy_predict(path_data):
+    """
+
+    Parameters
+    ----------
+    path_data : (bytes) path to the data
+    preprocessing_input : Pr-processing input unit to be used in case some backbone is used in the classifier
+
+    Returns
+    -------
+
+    """
+    if path_data.endswith('.npz'):
+        img_array = np.load(path_data)
+        img = img_array['arr_0']
+    else:
+        img = np.load(path_data)
+
+    img = img.astype(np.float64)
+    return img
+
 def tf_parser_npy(x, y):
 
     def _parse(x, y):
@@ -462,86 +483,76 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
     if len(test_x) % batch_size != 0:
         test_steps += 1
 
-    model.evaluate(test_dataset, steps=test_steps)
+    evaluation = model.evaluate(test_dataset, steps=test_steps)
     inference_times = []
+    prediction_names = []
+    prediction_outputs = []
+    real_values = []
     print('Evaluation results:')
     print(evaluation)
-
     for i, (x, y) in tqdm.tqdm(enumerate(zip(test_x, test_y)), total=len(test_x)):
+        real_values.append(dataset_dictionary[x])
+        prediction_names.append(os.path.split(x)[-1])
         init_time = time.time()
-        x = read_stacked_images_npy(x)
+        x = read_stacked_images_npy_predict(x)
         x = np.expand_dims(x, axis=0)
         y_pred = model.predict(x)
-        print(y_pred, y)
+        prediction_outputs.append(y_pred[0])
         inference_times.append(time.time() - init_time)
         # determine the top-1 prediction class
-        predicts = np.argmax(y_pred, axis=1)
+        prediction_id = np.argmax(y_pred[0])
 
-    print('End')
-    """    for x in predictions:
-            for i in range(len(np.unique(predicts))):
-                x_p[i].append(x[i])
+    print('Prediction times analysis')
+    print(np.min(prediction_outputs), np.mean(prediction_outputs), np.max(prediction_outputs))
 
-    label_index = {v: k for k, v in data_gen.class_indices.items()}
-    predicts = [label_index[p] for p in predicts]
-    header_column = ['class_' + str(i+1) for i in range(len(np.unique(predicts)))]
+    unique_values = np.unique(real_values)
+    label_index = [unique_values[np.argmax(pred)] for pred in prediction_outputs]
+
+    x_pred = [[] for _ in range(len(unique_values))]
+    for x in prediction_outputs:
+        for i in range(len(x)):
+            x_pred[i].append(x[i])
+
+    header_column = ['class_' + str(i+1) for i in range(5)]
     header_column.insert(0, 'fname')
     header_column.append('over all')
+    header_column.append('real values')
     df = pd.DataFrame(columns=header_column)
-    df['fname'] = [os.path.basename(x) for x in data_gen.filenames]
-
-    for i in range(len(np.unique(predicts))):
+    df['fname'] = [os.path.basename(x_name) for x_name in test_x]
+    df['real values'] = real_values
+    for i in range(len(unique_values)):
         class_name = 'class_' + str(i+1)
-        df[class_name] = x_p[i]
+        df[class_name] = x_pred[i]
 
-    df['over all'] = predicts
+    df['over all'] = label_index
     # save the predictions  of each case
     results_csv_file = ''.join([results_directory, 'predictions_', output_name, '_', results_id, '_.csv'])
     df.to_csv(results_csv_file, index=False)
 
     if analyze_data is True:
-        list_files = [f for f in os.listdir(directory_to_evaluate) if f.endswith('.csv')]
-        if list_files:
-            annotations_csv_data = list_files.pop()
-            dir_annotations_csv = directory_to_evaluate + annotations_csv_data
+        pass
 
-            if len(np.unique(predicts)) == 2:
-                auc = daa.calculate_auc_and_roc(results_csv_file, dir_annotations_csv, output_name, plot=False,
-                                                results_directory=results_directory, results_id=results_id, save_plot=True)
-                print(f'AUC: {auc}')
-        else:
-            print(f'No annotation file found in {directory_to_evaluate}')
-
-    return results_csv_file"""
+    return results_csv_file
 
 
-def evalute_test_directory(model, test_data, results_directory, new_results_id, backbone_model, analyze_data=True):
+def evalute_test_directory(model, test_data, results_directory, new_results_id, analyze_data=True):
 
     # determine if there are sub_folders or if it's the absolute path of the dataset
-    sub_dirs = [f for f in os.listdir(test_data) if os.path.isdir(test_data + f)]
+    sub_dirs = os.listdir(test_data)
     if sub_dirs:
+        print(f'sub-directoires {sub_dirs} found in test foler')
         for sub_dir in sub_dirs:
-            sub_sub_dirs = [f for f in os.listdir(test_data + sub_dir) if
-                            os.path.isdir(''.join([test_data, sub_dir, '/', f]))]
-            if sub_sub_dirs:
-                print(f'Sub-directories:{sub_dirs} found in {test_data}')
-                # this means that inside each sub-dir there is more directories so we can iterate over the previous one
-                name_file = evaluate_and_predict(model, ''.join([test_data, sub_dir, '/']), results_directory,
-                                                 results_id=new_results_id, output_name=sub_dir,
-                                                 analyze_data=analyze_data)
-
-                print(f'Evaluation results saved at {name_file}')
-            else:
-                name_file = evaluate_and_predict(model, test_data, results_directory,
-                                                 results_id=new_results_id, output_name='test',
-                                                 analyze_data=analyze_data)
-                print(f'Evaluation results saved at {name_file}')
-                break
+            test_data_dir = ''.join([test_data, '/', sub_dir])
+            name_file = evaluate_and_predict(model, test_data_dir, results_directory,
+                                             results_id=new_results_id, output_name='test',
+                                             analyze_data=analyze_data)
+            print(f'Evaluation results saved at {name_file}')
 
     else:
         name_file = evaluate_and_predict(model, test_data, results_directory,
                                          results_id=new_results_id, output_name='test',
                                          analyze_data=analyze_data)
+
         print(f'Evaluation results saved at {name_file}')
 
 
@@ -649,26 +660,21 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     if eval_val_set is True:
         evaluate_and_predict(model, val_dataset, results_directory,
                              results_id=new_results_id, output_name='val',
-                             backbone_model=backbone_model)
+                             )
 
     if eval_train_set is True:
         evaluate_and_predict(model, train_dataset, results_directory,
                              results_id=new_results_id, output_name='train',
-                             backbone_model=backbone_model)
+                             )
 
     if 'test' in files_dataset_directory:
         path_test_dataset = os.path.join(dataset_dir, 'test')
-        list_sub_dirs = os.listdir(path_test_dataset)
-        if list_sub_dirs:
-            for folder in list_sub_dirs:
-                sub_path_test_dataset = os.path.join(path_test_dataset, folder)
-                evalute_test_directory(model, sub_path_test_dataset + '/', results_directory, new_results_id, backbone_model, analyze_data=True)
-        else:
-            evalute_test_directory(model, path_test_dataset, results_directory, new_results_id, backbone_model,
-                                   analyze_data=True)
-    if test_data != '':
-        evalute_test_directory(model, path_test_dataset, results_directory, new_results_id, backbone_model,
-                               analyze_data=True)
+        print(f'Test directory found at: {path_test_dataset}')
+        evalute_test_directory(model, path_test_dataset, results_directory, new_results_id,
+                                   )
+    #if test_data != '':
+    #    evalute_test_directory(model, test_data, results_directory, new_results_id,
+    #                           )
 
 
 def main(_argv):
