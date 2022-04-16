@@ -383,7 +383,8 @@ def build_model():
     b3 = backbone_model_3(b3)
 
     x = Concatenate()([b1, b2, b3])
-    x = GlobalAveragePooling2D()(x)
+    #x = GlobalAveragePooling2D()(x)
+    x = Flatten()(x)
     x = Dense(512, activation='relu')(x)
     #x = Dropout(0.5)(x)
     x = Dense(1024, activation='relu')(x)
