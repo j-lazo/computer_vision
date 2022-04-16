@@ -571,7 +571,8 @@ def compile_model(model, learning_rate, optimizer='adam', loss='categorical_cros
 
 
 def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_dir=os.getcwd() + '/results/', backbone_model=None,
-              val_dataset=None, eval_val_set=None, eval_train_set=False, test_data=None, batch_size=16, buffer_size=50):
+              val_dataset=None, eval_val_set=None, eval_train_set=False, test_data=None,
+              batch_size=16, buffer_size=50):
     mode = 'fit'
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
     # Decide how to act according to the mode (train/predict/train-backbone... )
