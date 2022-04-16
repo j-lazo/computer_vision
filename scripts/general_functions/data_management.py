@@ -1413,12 +1413,12 @@ def merge_annotations_data(annotations_list, selected_elements=[], output_dir=''
             else:
                 print(element, 'not found')
 
-    print(df)
+    print(new_df)
     if output_dir != '':
         save_dir = output_dir + '/all_annotations.csv'
     else:
         save_dir = os.getcwd() + '/all_annotations.csv'
-    df.to_csv(save_dir)
+    df.to_csv(save_dir, index=False)
 
 
 def merge_multi_domain_data(directory_dataset, keywords=['converted', 'reconverted'], csv_annotations=None,
@@ -1486,6 +1486,38 @@ def merge_multi_domain_data(directory_dataset, keywords=['converted', 'reconvert
                         np.savez_compressed(save_dir_name, array_imgs)
 
     print(f'files saved at:{output_dir}')
+
+
+def generate_annotations_npy_from_csv(directory_npy_data, csv_sample_file, output_name=None):
+
+    df = pd.read_csv(csv_sample_file)
+    new_df = df.copy()
+    list_names = df['image_name'].tolist()
+    list_names = [name.replace('.png', '') for name in list_names]
+
+    list_sub_dirs = [f for f in os.listdir(directory_npy_data) if os.path.isdir(directory_npy_data + f)]
+    for sub_dir_name in list_sub_dirs:
+        sub_dir = os.path.join(directory_npy_data, sub_dir_name)
+        list_files = os.listdir(sub_dir)
+        for i, npy_file in enumerate(tqdm.tqdm(list_files[:], desc=f'Reading data in {sub_dir_name}')):
+            if npy_file.replace('.npz', '') in list_names:
+                index = list_names.index(npy_file.replace('.npz', ''))
+                row = new_df.iloc[index]
+                print(npy_file)
+                print(row)
+                row['image_name'] = npy_file
+                new_df.loc[index] = row
+            else:
+                print(f'.png match of {npy_file} not found')
+
+    if output_name:
+        output_file_name = directory_npy_data + output_name
+    else:
+        output_file_name = directory_npy_data + 'annotations_dataset.csv'
+
+    print(new_df)
+    new_df.to_csv(output_file_name, index=False)
+    print(f'file saved at {output_file_name}')
 
 
 if __name__ == "__main__":
