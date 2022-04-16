@@ -124,11 +124,34 @@ def run_inference_classification(_argv):
     img_class.call_models('', mode, directory_model=directory_model, file_to_predic=file_to_predic)
 
 
+def run_experiment_classification_tf(_arv):
+    name_model = 'multi-input_GAN'
+    mode = FLAGS.mode
+    batch_size = FLAGS.batch_size
+    epochs = FLAGS.epochs
+    dataset_dir = FLAGS.dataset_dir
+    learning_rate = FLAGS.learning_rate
+
+    if dataset_dir in DATASETS:
+        data_dir = ''.join([os.getcwd(), '/datasets/', dataset_dir, '/'])
+        test_data = data_dir + 'test/'
+        results_dir = data_dir + 'results/'
+    else:
+        data_dir = dataset_dir
+        test_data = FLAGS.test_dataset
+        results_dir = ''
+
+    if mode == 'fit':
+        img_class_tf.fit_model(name_model, data_dir, epochs=epochs, results_dir=results_dir,
+                               learning_rate=learning_rate, batch_size=batch_size)
+
+
 def main(_argv):
     FUNCTION_MAP = {'grad_cam': grad_cam_experiment,
                     'classification': run_experiment_classification,
                     'segmentation': run_segmentation_experiment,
-                    'inference_classification': run_inference_classification}
+                    'inference_classification': run_inference_classification,
+                    'classification_tf': run_experiment_classification_tf}
     func = FUNCTION_MAP[FLAGS.experiment_type]
     try:
         app.run(func)
