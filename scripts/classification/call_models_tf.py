@@ -330,7 +330,7 @@ def load_pretrained_backbones(name_model, weights='imagenet', include_top=False,
     return new_base_model
 
 
-def build_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_contact='globalpooling',
+def build_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_concat='globalpooling',
                 dropout=False):
 
     input_sizes_models = {'vgg16': (224, 224), 'vgg19': (224, 224), 'inception_v3': (299, 299),
@@ -399,7 +399,7 @@ def build_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_contact
 
     else:
         x = Concatenate()([b1, b2])
-    if after_contact == 'globalpooling':
+    if after_concat == 'globalpooling':
         x = GlobalAveragePooling2D()(x)
     else:
         x = Flatten()(x)
@@ -591,10 +591,10 @@ def compile_model(model, learning_rate, optimizer='adam', loss='categorical_cros
 
 def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_dir=os.getcwd() + '/results/', backbone_model=None,
               val_dataset=None, eval_val_set=None, eval_train_set=False, test_data=None,
-              batch_size=16, buffer_size=50, backbones=['restnet50'], dropout=False, after_contact='globalpooling'):
+              batch_size=16, buffer_size=50, backbones=['restnet50'], dropout=False, after_concat='globalpooling'):
     if len(backbones) > 3:
         raise ValueError('number maximum of backbones is 3!')
-    mode = ''.join(['fit_dop_', str(dropout), '_', after_contact, '_'])
+    mode = ''.join(['fit_dop_', str(dropout), '_', after_concat, '_'])
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
     # Decide how to act according to the mode (train/predict/train-backbone... )
     files_dataset_directory = [f for f in os.listdir(dataset_dir)]
@@ -649,7 +649,7 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     # Build the model
     if len(backbones) == 1:
         backbones = backbones*3
-    model = build_model(backbones=backbones, dropout=dropout, after_contact=after_contact)
+    model = build_model(backbones=backbones, dropout=dropout, after_concat=after_concat)
     model = compile_model(model, learning_rate)
 
     temp_name_model = results_directory + new_results_id + "_model.h5"

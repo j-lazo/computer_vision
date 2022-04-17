@@ -36,12 +36,9 @@ flags.DEFINE_string('results_dir', os.getcwd() + 'results/', 'path to dataset')
 flags.DEFINE_string('weights', '', 'path to weights file')
 flags.DEFINE_string('directory_model', '', 'indicate the path to the directory')
 flags.DEFINE_float('validation_split', 0.2, 'iif not validation dir but needed')
+flags.DEFINE_string('after_concat', 'globalpooling', 'layer after concatenation: Global average Pooling or Flatten')
 flags.DEFINE_string('file_to_predic', '', 'Directory or file where to perform predictions if predict mode selected')
-flags.DEFINE_enum('backbones', 'resnet101', ['resnet101', 'resnet50', 'densenet121', 'vgg19'],
-                      'resnet101: , '
-                      'resnet50: , '
-                      'densenet121: ,'
-                      'vgg19: ')
+flags.DEFINE_list('backbones', ['resnet50', 'resnet101'], 'A list of the nets used as backbones: resnet101, resnet50, densenet121, vgg19')
 
 def grad_cam_experiment(_argv):
 
@@ -138,7 +135,8 @@ def run_experiment_classification_tf(_arv):
     learning_rate = FLAGS.learning_rate
     dropout = FLAGS.dropout
     backbones = FLAGS.backbones
-
+    after_concat = FLAGS.after_concat
+    print(backbones)
     if dataset_dir in DATASETS:
         data_dir = ''.join([os.getcwd(), '/datasets/', dataset_dir, '/'])
         test_data = data_dir + 'test/'
@@ -152,7 +150,8 @@ def run_experiment_classification_tf(_arv):
         img_class_tf.fit_model(name_model, data_dir, epochs=epochs, results_dir=results_dir,
                                learning_rate=learning_rate, batch_size=batch_size,
                                dropout=dropout,
-                               backbones=backbones)
+                               backbones=backbones,
+                               after_concat=after_concat)
 
 
 def main(_argv):
