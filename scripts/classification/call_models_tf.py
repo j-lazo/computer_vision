@@ -280,23 +280,22 @@ def load_pretrained_backbones(name_model, weights='imagenet', include_top=False,
         weights_dir = base_dir_weights + 'resnet50/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
         base_model = applications.resnet50.ResNet50(include_top=include_top, weights=weights_dir)
         base_model.trainable = True
-        base_model.name = new_name
         input_size = (224, 224, 3)
 
     elif name_model == 'resnet101':
         weights_dir = base_dir_weights + 'resnet101/resnet101_weights_tf_dim_ordering_tf_kernels_notop.h5'
         base_model = applications.resnet.ResNet101(include_top=include_top, weights=weights_dir)
         base_model.trainable = True
-        layer1 = base_model.layers[2]
-        global weights_1
-        weights_1 = layer1.weights
+        #layer1 = base_model.layers[2]
+        #global weights_1
+        #weights_1 = layer1.weights
 
-        new_base_model = tf.keras.models.clone_model(base_model)
-        new_base_model.set_weights(base_model.get_weights())
-        layer2 = new_base_model.layers[2]
-        global weights_2
-        weights_2 = layer2.weights
-        print(np.array_equal(weights_1[0], weights_2[0]))
+        #new_base_model = tf.keras.models.clone_model(base_model)
+        #new_base_model.set_weights(base_model.get_weights())
+        #layer2 = new_base_model.layers[2]
+        #global weights_2
+        #weights_2 = layer2.weights
+        #print(np.array_equal(weights_1[0], weights_2[0]))
 
         #base_model.name = new_name
 
@@ -323,10 +322,8 @@ def load_pretrained_backbones(name_model, weights='imagenet', include_top=False,
     else:
         raise ValueError(f' MODEL: {name_model} not found')
 
-    layer3 = new_base_model.layers[2]
-    global weights3
-    weights3 = layer3.weights
-    print(np.array_equal(weights3[0], weights_2[0]))
+    new_base_model = tf.keras.models.clone_model(base_model)
+    new_base_model.set_weights(base_model.get_weights())
     return new_base_model
 
 
@@ -414,77 +411,6 @@ def build_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_concat=
     output_layer = Dense(5, activation='softmax')(x)
 
     return Model(inputs=input_model, outputs=output_layer, name='multi_input_classification')
-
-
-"""def build_model():
-
-    
-    ## Model
-    # check here: https://github.com/tensorflow/tensorflow/issues/20698
-    #inputs = layers.Concatenate()([model_data_a.output, model_data_b.output]); ### Get the outputs of 'model_data_a' , 'model_data_b' and combine the outputs
-    #outputs = layers.Dense(1, activation=relu)(inputs);
-    #model = tf.keras.Model([model_data_a.input, model_data_b.input], outputs); ## Add both inputs
-
-
-    num_classes = 5
-    #input_model = Input((3, 256, 256, 3))
-    input_original = Input((256, 256, 3))
-    input_convert = Input((256, 256, 3))
-    input_reconvert = Input((256, 256, 3))
-    #print('General input:', input_model)
-    #x1, _, _ = tf.split(input_model[0, :, :, :, :], num_or_size_splits=3, axis=0)
-    #print('AFTER split:', x1)
-    #x1 = input_model[:, 0, :, :, :]
-    input_backbone_1 = input_original
-    print('Input backbone 1:', np.shape(input_backbone_1))
-    input_backbone_2 = input_convert
-    input_backbone_3 = input_reconvert
-
-    b1 = tf.image.resize(input_backbone_1, (224, 224), method='bilinear')
-    b2 = tf.image.resize(input_backbone_2, (224, 224), method='bilinear')
-    b3 = tf.image.resize(input_backbone_3, (224, 224), method='bilinear')
-
-    b1 = tf.keras.applications.resnet.preprocess_input(b1)
-    b2 = tf.keras.applications.resnet.preprocess_input(b2)
-    b3 = tf.keras.applications.resnet.preprocess_input(b3)
-
-    backbone_model_1 = load_pretrained_backbones('resnet101')
-    backbone_model_2 = load_pretrained_backbones('resnet101')
-    backbone_model_3 = load_pretrained_backbones('resnet101')
-
-    backbone_model_1._name = 'backbone_1'
-    for layer in backbone_model_1.layers:
-        layer.trainable = False
-    backbone_model_2._name = 'backbone_2'
-    for layer in backbone_model_2.layers:
-        layer.trainable = False
-    backbone_model_3._name = 'backbone_3'
-    for layer in backbone_model_3.layers:
-        layer.trainable = False
-
-    b1 = backbone_model_1(b1)
-    b2 = backbone_model_2(b2)
-    b3 = backbone_model_3(b3)
-    print(np.shape(b1))
-    print(np.shape(b2))
-    print(np.shape(b3))
-    x = Concatenate()([b1, b2, b3])
-    print(np.shape(x))
-    x = GlobalAveragePooling2D()(x)
-    print(np.shape(x))
-    x = Dense(512, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    x = Dense(1024, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    x = Dense(1024, activation='relu')(x)
-    x = Flatten()(x)
-    output_layer = Dense(5, activation='softmax')(x)
-    print('output shape', np.shape(output_layer))
-
-    ensemble = Model(inputs=[input_original, input_convert, input_reconvert],
-                     outputs=[output_layer], name='Ensemble_Classification')
-
-    return ensemble"""
 
 
 def evaluate_and_predict(model, directory_to_evaluate, results_directory,
@@ -636,7 +562,7 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
 
     # ID name for the folder and results
     name_model = 'gan_multi_input'
-    backbone_model = backbones[0]
+    backbone_model = ''.join([name_model + '_' for name_model in backbones])
     new_results_id = generate_experiment_ID(name_model=name_model, learning_rate=learning_rate,
                                             batch_size=batch_size, backbone_model=backbone_model,
                                             mode=mode)
@@ -649,6 +575,7 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     # Build the model
     if len(backbones) == 1:
         backbones = backbones*3
+    print(f'list backbones:{backbones}')
     model = build_model(backbones=backbones, dropout=dropout, after_concat=after_concat)
     model = compile_model(model, learning_rate)
 
