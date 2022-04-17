@@ -27,6 +27,7 @@ flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
 flags.DEFINE_integer('epochs', 15, 'number of epochs')
 flags.DEFINE_integer('trainable_layers', -7, 'Trainable layers in case backbone is trained')
 flags.DEFINE_bool('analyze_data', True, 'select if analyze data or not')
+flags.DEFINE_bool('dropout', False, 'select if drop out included between the FC layers or not')
 flags.DEFINE_integer('fine_tune_epochs', 5, 'epochs to fine tune the model')
 flags.DEFINE_string('dataset_dir', os.getcwd() + 'data/', 'path to dataset')
 flags.DEFINE_string('val_dataset', '', 'path to validation dataset')
@@ -36,7 +37,11 @@ flags.DEFINE_string('weights', '', 'path to weights file')
 flags.DEFINE_string('directory_model', '', 'indicate the path to the directory')
 flags.DEFINE_float('validation_split', 0.2, 'iif not validation dir but needed')
 flags.DEFINE_string('file_to_predic', '', 'Directory or file where to perform predictions if predict mode selected')
-
+flags.DEFINE_enum('backbones', 'resnet101', ['resnet101', 'resnet50', 'densenet121', 'vgg19'],
+                      'resnet101: , '
+                      'resnet50: , '
+                      'densenet121: ,'
+                      'vgg19: ')
 
 def grad_cam_experiment(_argv):
 
@@ -131,6 +136,8 @@ def run_experiment_classification_tf(_arv):
     epochs = FLAGS.epochs
     dataset_dir = FLAGS.dataset_dir
     learning_rate = FLAGS.learning_rate
+    dropout = FLAGS.dropout
+    backbones = FLAGS.backbones
 
     if dataset_dir in DATASETS:
         data_dir = ''.join([os.getcwd(), '/datasets/', dataset_dir, '/'])
@@ -143,7 +150,9 @@ def run_experiment_classification_tf(_arv):
 
     if mode == 'fit':
         img_class_tf.fit_model(name_model, data_dir, epochs=epochs, results_dir=results_dir,
-                               learning_rate=learning_rate, batch_size=batch_size)
+                               learning_rate=learning_rate, batch_size=batch_size,
+                               dropout=dropout,
+                               backbones=backbones)
 
 
 def main(_argv):
