@@ -330,73 +330,91 @@ def load_pretrained_backbones(name_model, weights='imagenet', include_top=False,
     return new_base_model
 
 
-#def build_model(model_type, list_backbone_models):
-#    input_sizes_models = {'vgg16': (224, 224), 'vgg19': (224, 224), 'inception_v3': (299, 299),
-#                          'resnet50': (224, 224), 'resnet101': (224, 244), 'mobilenet': (224, 224),
-#                          'densenet121': (224, 224), 'xception': (299, 299)}
+def build_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_contact='globalpooling',
+                dropout=False):
 
-def build_model():
+    input_sizes_models = {'vgg16': (224, 224), 'vgg19': (224, 224), 'inception_v3': (299, 299),
+                          'resnet50': (224, 224), 'resnet101': (224, 244), 'mobilenet': (224, 224),
+                          'densenet121': (224, 224), 'xception': (299, 299)}
+
+    num_backbones = len(backbones)
     input_model = Input((3, 256, 256, 3))
-
     x1, x2, x3 = tf.split(input_model, 3, axis=1)
     input_backbone_1 = tf.squeeze(x1, axis=1)
     input_backbone_2 = tf.squeeze(x2, axis=1)
     input_backbone_3 = tf.squeeze(x3, axis=1)
 
-    b1 = tf.image.resize(input_backbone_1, (224, 224), method='bilinear')
-    b2 = tf.image.resize(input_backbone_2, (224, 224), method='bilinear')
-    b3 = tf.image.resize(input_backbone_3, (224, 224), method='bilinear')
+    b1 = tf.image.resize(input_backbone_1, input_sizes_models[backbones[0]], method='bilinear')
+    if backbones[0] == 'resnet101':
+        b1 = tf.keras.applications.resnet.preprocess_input(b1)
+    elif backbones[0] == 'resnet50':
+        b1 = tf.keras.applications.resnet50.preprocess_input(b1)
+    elif backbones[0] == 'densenet121':
+        b1 = tf.keras.applications.densenet.preprocess_input(b1)
+    elif backbones[0] == 'vgg19':
+        b1 = tf.keras.applications.vgg19.preprocess_input(b1)
+    elif backbones[0] == 'inception_v3':
+        b1 = tf.keras.applications.inception_v3.preprocess_input(b1)
 
-    b1 = tf.keras.applications.resnet.preprocess_input(b1)
-    b2 = tf.keras.applications.resnet.preprocess_input(b2)
-    b3 = tf.keras.applications.resnet.preprocess_input(b3)
-
-    backbone_model_1 = load_pretrained_backbones('resnet101')
-    backbone_model_2 = load_pretrained_backbones('resnet101')
-    backbone_model_3 = load_pretrained_backbones('resnet101')
-
+    backbone_model_1 = load_pretrained_backbones(backbones[0])
     backbone_model_1._name = 'backbone_1'
     for layer in backbone_model_1.layers:
         layer.trainable = False
+    b1 = backbone_model_1(b1)
 
+    b2 = tf.image.resize(input_backbone_2, input_sizes_models[backbones[1]], method='bilinear')
+    if backbones[1] == 'resnet101':
+        b2 = tf.keras.applications.resnet.preprocess_input(b2)
+    elif backbones[1] == 'resnet50':
+        b2 = tf.keras.applications.resnet50.preprocess_input(b2)
+    elif backbones[1] == 'densenet121':
+        b2 = tf.keras.applications.densenet.preprocess_input(b2)
+    elif backbones[1] == 'vgg19':
+        b2 = tf.keras.applications.vgg19.preprocess_input(b2)
+    elif backbones[1] == 'inception_v3':
+        b2 = tf.keras.applications.inception_v3.preprocess_input(b2)
+    backbone_model_2 = load_pretrained_backbones(backbones[1])
     backbone_model_2._name = 'backbone_2'
     for layer in backbone_model_2.layers:
         layer.trainable = False
-    backbone_model_3._name = 'backbone_3'
-    for layer in backbone_model_3.layers:
-        layer.trainable = False
-
-    """layer4 = backbone_model_1.layers[2]
-    weights4 = layer4.weights
-    print(np.array_equal(weights4[0], weights3[0]))
-
-    layer5 = backbone_model_2.layers[2]
-    weights5 = layer5.weights
-    print(np.array_equal(weights4[0], weights5[0]))
-
-    layer6 = backbone_model_3.layers[2]
-    weights6 = layer6.weights
-    print(np.array_equal(weights5[0], weights6[0]))"""
-
-    b1 = backbone_model_1(b1)
     b2 = backbone_model_2(b2)
-    b3 = backbone_model_3(b3)
+    if num_backbones == 3:
+        b3 = tf.image.resize(input_backbone_3, input_sizes_models[backbones[2]], method='bilinear')
+        if backbones[2] == 'resnet101':
+            b3 = tf.keras.applications.resnet.preprocess_input(b3)
+        elif backbones[2] == 'resnet50':
+            b3 = tf.keras.applications.resnet50.preprocess_input(b3)
+        elif backbones[2] == 'densenet121':
+            b3 = tf.keras.applications.densenet.preprocess_input(b3)
+        elif backbones[2] == 'vgg19':
+            b3 = tf.keras.applications.vgg19.preprocess_input(b3)
+        elif backbones[2] == 'inception_v3':
+            b3 = tf.keras.applications.inception_v3.preprocess_input(b3)
+        backbone_model_3 = load_pretrained_backbones(backbones[2])
+        backbone_model_3._name = 'backbone_3'
+        for layer in backbone_model_3.layers:
+            layer.trainable = False
+        b3 = backbone_model_3(b3)
+        x = Concatenate()([b1, b2, b3])
 
-    x = Concatenate()([b1, b2, b3])
-    #x = GlobalAveragePooling2D()(x)
-    x = Flatten()(x)
+    else:
+        x = Concatenate()([b1, b2])
+    if after_contact == 'globalpooling':
+        x = GlobalAveragePooling2D()(x)
+    else:
+        x = Flatten()(x)
     x = Dense(512, activation='relu')(x)
-    #x = Dropout(0.5)(x)
+    if dropout:
+        x = Dropout(0.5)(x)
     x = Dense(1024, activation='relu')(x)
-    #x = Dropout(0.5)(x)
+    if dropout:
+        x = Dropout(0.5)(x)
     x = Dense(1024, activation='relu')(x)
     x = Flatten()(x)
     output_layer = Dense(5, activation='softmax')(x)
 
-    ensemble = Model(inputs=input_model,
-                     outputs=output_layer, name='Multi_Imaging_Classification')
+    return Model(inputs=input_model, outputs=output_layer, name='multi_input_classification')
 
-    return ensemble
 
 """def build_model():
 
@@ -573,8 +591,10 @@ def compile_model(model, learning_rate, optimizer='adam', loss='categorical_cros
 
 def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_dir=os.getcwd() + '/results/', backbone_model=None,
               val_dataset=None, eval_val_set=None, eval_train_set=False, test_data=None,
-              batch_size=16, buffer_size=50):
-    mode = 'fit'
+              batch_size=16, buffer_size=50, backbones=['restnet50'], dropout=False, after_contact='globalpooling'):
+    if len(backbones) > 3:
+        raise ValueError('number maximum of backbones is 3!')
+    mode = ''.join(['fit_dop_', str(dropout), '_', after_contact, '_'])
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
     # Decide how to act according to the mode (train/predict/train-backbone... )
     files_dataset_directory = [f for f in os.listdir(dataset_dir)]
@@ -616,7 +636,7 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
 
     # ID name for the folder and results
     name_model = 'gan_multi_input'
-    backbone_model = 'resnet101'
+    backbone_model = backbones[0]
     new_results_id = generate_experiment_ID(name_model=name_model, learning_rate=learning_rate,
                                             batch_size=batch_size, backbone_model=backbone_model,
                                             mode=mode)
@@ -627,8 +647,9 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
         os.mkdir(results_directory)
 
     # Build the model
-
-    model = build_model()
+    if len(backbones) == 1:
+        backbones = backbones*3
+    model = build_model(backbones=backbones, dropout=dropout, after_contact=after_contact)
     model = compile_model(model, learning_rate)
 
     temp_name_model = results_directory + new_results_id + "_model.h5"
@@ -637,7 +658,7 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
                         monitor="val_loss", save_best_only=True),
         ReduceLROnPlateau(monitor='val_loss', patience=25),
         CSVLogger(results_directory + 'train_history_' + new_results_id + "_.csv"),
-        EarlyStopping(monitor='val_loss', patience=15, restore_best_weights=True)]
+        EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)]
 
     # track time
     start_time = datetime.datetime.now()
