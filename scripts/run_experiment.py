@@ -19,7 +19,7 @@ DATASETS = ['tissue_classification', 'kvasir_image_classification', 'bladder_tis
             'bladder_tissue_classification_npy']
 
 flags.DEFINE_string('experiment_type', '', 'experiment type')
-flags.DEFINE_string('name_model', 'fc_3layers', 'name of the model')
+flags.DEFINE_string('name_model', 'gan_merge_features', 'name of the model: gan_merge_features, gan_merge_predictions_v1')
 flags.DEFINE_string('mode', 'train_backbone', 'train, predict, train_backbone')
 flags.DEFINE_string('backbone', 'resnet50', 'backbone network')
 flags.DEFINE_integer('batch_size', 8, 'batch size')
@@ -127,7 +127,6 @@ def run_inference_classification(_argv):
 
 
 def run_experiment_classification_tf(_arv):
-    name_model = 'multi-input_GAN'
     mode = FLAGS.mode
     batch_size = FLAGS.batch_size
     epochs = FLAGS.epochs
@@ -136,6 +135,7 @@ def run_experiment_classification_tf(_arv):
     dropout = FLAGS.dropout
     backbones = FLAGS.backbones
     after_concat = FLAGS.after_concat
+    name_model = FLAGS.name_model
     print(backbones)
     if dataset_dir in DATASETS:
         data_dir = ''.join([os.getcwd(), '/datasets/', dataset_dir, '/'])
