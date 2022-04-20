@@ -51,7 +51,7 @@ def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', b
     return id_name
 
 
-def load_data_from_directory(path_data):
+def load_data_from_directory(path_data, csv_annotations=None):
     """
     Give a path, creates two lists with the
     Parameters
@@ -62,12 +62,31 @@ def load_data_from_directory(path_data):
     -------
 
     """
+
     images_path = list()
     labels = list()
     dictionary_labels = {}
 
     list_files = os.listdir(path_data)
+    csv_indir = [f for f in list_files if f.endswith('.csv')].pop()
+    if csv_annotations:
+        data_frame = pd.read_csv(csv_annotations)
+    elif csv_indir:
+        data_frame = pd.read_csv(os.path.join(path_data, csv_indir))
+
     list_unique_classes = np.unique([f for f in list_files if os.path.isdir(os.path.join(path_data, f))])
+    """if data_frame:
+        for j, unique_class in enumerate(list_unique_classes):
+            path_images = ''.join([path_data, '/', unique_class, '/*'])
+            added_images = sorted(glob(path_images))
+            new_dictionary_labels = {image_name: unique_class for image_name in added_images}
+
+            images_path = images_path + added_images
+            added_labels = [j] * len(added_images)
+            labels = labels + added_labels
+            dictionary_labels = {**dictionary_labels, **new_dictionary_labels}
+
+    elif list_unique_classes:"""
     for j, unique_class in enumerate(list_unique_classes):
         path_images = ''.join([path_data, '/', unique_class, '/*'])
         added_images = sorted(glob(path_images))
@@ -167,11 +186,10 @@ def generate_tf_dataset(x, y, batch_size=1, shuffle=False, buffer_size=10, prepr
     INPUT_SIZE = input_size
 
     dataset = tf.data.Dataset.from_tensor_slices((x, y))
-    if shuffle:
-        dataset = dataset.shuffle(buffer_size=buffer_size * batch_size)
-
     dataset = dataset.map(tf_parser_npy)
     dataset = dataset.batch(batch_size)
+    if shuffle:
+        dataset = dataset.shuffle(buffer_size=buffer_size * batch_size)
     dataset = dataset.repeat()
 
     return dataset
@@ -192,7 +210,7 @@ def analyze_tf_dataset(dataset_dir, plot=True):
     """
 
     test_x, test_y, dataset_dictionary = load_data_from_directory(dataset_dir)
-    test_dataset = generate_tf_dataset(test_x, test_y, batch_size=8, shuffle=True,
+    test_dataset = generate_tf_dataset(test_x, test_y, batch_size=8, shuffle=False,
                                        buffer_size=500)
 
     unique_labels = np.unique([f for f in os.listdir(dataset_dir) if os.path.isdir(dataset_dir + f)])
@@ -327,6 +345,105 @@ def load_pretrained_backbones(name_model, weights='imagenet', include_top=False,
     return new_base_model
 
 
+def build_model_v1(backbones=['resnet101', 'resnet101', 'resnet101'], after_concat='globalpooling',
+                dropout=False):
+
+    input_sizes_models = {'vgg16': (224, 224), 'vgg19': (224, 224), 'inception_v3': (299, 299),
+                          'resnet50': (224, 224), 'resnet101': (224, 244), 'mobilenet': (224, 224),
+                          'densenet121': (224, 224), 'xception': (299, 299)}
+
+    num_backbones = len(backbones)
+    input_model = Input((3, 256, 256, 3))
+    x1, x2, x3 = tf.split(input_model, 3, axis=1)
+    input_backbone_1 = tf.squeeze(x1, axis=1)
+    input_backbone_2 = tf.squeeze(x2, axis=1)
+    input_backbone_3 = tf.squeeze(x3, axis=1)
+
+    b1 = tf.image.resize(input_backbone_1, input_sizes_models[backbones[0]], method='bilinear')
+    if backbones[0] == 'resnet101':
+        b1 = tf.keras.applications.resnet.preprocess_input(b1)
+    elif backbones[0] == 'resnet50':
+        b1 = tf.keras.applications.resnet50.preprocess_input(b1)
+    elif backbones[0] == 'densenet121':
+        b1 = tf.keras.applications.densenet.preprocess_input(b1)
+    elif backbones[0] == 'vgg19':
+        b1 = tf.keras.applications.vgg19.preprocess_input(b1)
+    elif backbones[0] == 'inception_v3':
+        b1 = tf.keras.applications.inception_v3.preprocess_input(b1)
+
+    backbone_model_1 = load_pretrained_backbones(backbones[0])
+    backbone_model_1._name = 'backbone_1'
+    for layer in backbone_model_1.layers:
+        layer.trainable = False
+    b1 = backbone_model_1(b1)
+    l1 = GlobalAveragePooling2D()(b1)
+    l1 = Dense(1024, activation='relu')(l1)
+    l1 = Dropout(0.5)(l1)
+    l1 = Dense(2048, activation='relu')(l1)
+    l1 = Dropout(0.5)(l1)
+    l1 = Dense(2048, activation='relu')(l1)
+    l1 = Flatten()(l1)
+
+    b2 = tf.image.resize(input_backbone_2, input_sizes_models[backbones[1]], method='bilinear')
+    if backbones[1] == 'resnet101':
+        b2 = tf.keras.applications.resnet.preprocess_input(b2)
+    elif backbones[1] == 'resnet50':
+        b2 = tf.keras.applications.resnet50.preprocess_input(b2)
+    elif backbones[1] == 'densenet121':
+        b2 = tf.keras.applications.densenet.preprocess_input(b2)
+    elif backbones[1] == 'vgg19':
+        b2 = tf.keras.applications.vgg19.preprocess_input(b2)
+    elif backbones[1] == 'inception_v3':
+        b2 = tf.keras.applications.inception_v3.preprocess_input(b2)
+    backbone_model_2 = load_pretrained_backbones(backbones[1])
+    backbone_model_2._name = 'backbone_2'
+    for layer in backbone_model_2.layers:
+        layer.trainable = False
+    b2 = backbone_model_2(b2)
+    l2 = GlobalAveragePooling2D()(b2)
+    l2 = Dense(1024, activation='relu')(l2)
+    l2 = Dropout(0.5)(l2)
+    l2 = Dense(2048, activation='relu')(l2)
+    l2 = Dropout(0.5)(l2)
+    l2 = Dense(2048, activation='relu')(l2)
+    l2 = Flatten()(l2)
+
+    if num_backbones == 3:
+        b3 = tf.image.resize(input_backbone_3, input_sizes_models[backbones[2]], method='bilinear')
+        if backbones[2] == 'resnet101':
+            b3 = tf.keras.applications.resnet.preprocess_input(b3)
+        elif backbones[2] == 'resnet50':
+            b3 = tf.keras.applications.resnet50.preprocess_input(b3)
+        elif backbones[2] == 'densenet121':
+            b3 = tf.keras.applications.densenet.preprocess_input(b3)
+        elif backbones[2] == 'vgg19':
+            b3 = tf.keras.applications.vgg19.preprocess_input(b3)
+        elif backbones[2] == 'inception_v3':
+            b3 = tf.keras.applications.inception_v3.preprocess_input(b3)
+        backbone_model_3 = load_pretrained_backbones(backbones[2])
+        backbone_model_3._name = 'backbone_3'
+        for layer in backbone_model_3.layers:
+            layer.trainable = False
+        b3 = backbone_model_3(b3)
+        l3 = GlobalAveragePooling2D()(b3)
+        l3 = Dense(1024, activation='relu')(l3)
+        l3 = Dropout(0.5)(l3)
+        l3 = Dense(2048, activation='relu')(l3)
+        l3 = Dropout(0.5)(l3)
+        l3 = Dense(2048, activation='relu')(l3)
+        l3 = Flatten()(l3)
+        x = Concatenate()([l1, l2, l3])
+
+    else:
+        x = Concatenate()([l1, l2])
+
+    x = Flatten()(x)
+    x = Dense(512, activation='relu')(x)
+    output_layer = Dense(5, activation='softmax')(x)
+
+    return Model(inputs=input_model, outputs=output_layer, name='multi_input_output_classification')
+
+
 def multi_output_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_concat='globalpooling',
                 dropout=False):
 
@@ -394,6 +511,16 @@ def multi_output_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_
         b3 = backbone_model_3(b3)
         x = Concatenate()([b1, b2, b3])
 
+        l3 = GlobalAveragePooling2D()(b3)
+        l3 = Dense(1024, activation='relu')(l3)
+        l3 = Dropout(0.5)(l3)
+        l3 = Dense(2048, activation='relu')(l3)
+        l3 = Dropout(0.5)(l3)
+        l3 = Dense(2048, activation='relu')(l3)
+        l3 = Flatten()(l3)
+        output_l3 = Dense(5, activation='softmax')(l3)
+
+
     else:
         x = Concatenate()([b1, b2])
     if after_concat == 'globalpooling':
@@ -410,8 +537,33 @@ def multi_output_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_
     x = Flatten()(x)
     output_layer = Dense(5, activation='softmax')(x)
 
-    return Model(inputs=input_model, outputs=output_layer, name='multi_input_classification')
+    l1 = GlobalAveragePooling2D()(b1)
+    l1 = Dense(1024, activation='relu')(l1)
+    l1 = Dropout(0.5)(l1)
+    l1 = Dense(2048, activation='relu')(l1)
+    l1 = Dropout(0.5)(l1)
+    l1 = Dense(2048, activation='relu')(l1)
+    l1 = Flatten()(l1)
+    output_l1 = Dense(5, activation='softmax')(l1)
 
+    l2 = GlobalAveragePooling2D()(b2)
+    l2 = Dense(1024, activation='relu')(l2)
+    l2 = Dropout(0.5)(l2)
+    l2 = Dense(2048, activation='relu')(l2)
+    l2 = Dropout(0.5)(l2)
+    l2 = Dense(2048, activation='relu')(l2)
+    l2 = Flatten()(l2)
+    output_l2 = Dense(5, activation='softmax')(l2)
+
+    l4 = Concatenate()([l1, l2, l3])
+    l4 = Flatten()(l4)
+    l4 = Dense(1024, activation='relu')(l4)
+    l4 = Dropout(0.5)(l4)
+    l4 = Dense(1024, activation='relu')(l4)
+    l4 = Flatten()(l4)
+    output_l4 = Dense(5, activation='softmax')(l4)
+
+    return Model(inputs=input_model, outputs=[output_layer, output_l1, output_l2, output_l3, output_l4], name='multi_input_output_classification')
 
 
 def build_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_concat='globalpooling',
@@ -648,7 +800,6 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
         os.mkdir(results_dir)
 
     # ID name for the folder and results
-    name_model = 'gan_multi_input'
     backbone_model = ''.join([name_model + '_' for name_model in backbones])
     new_results_id = generate_experiment_ID(name_model=name_model, learning_rate=learning_rate,
                                             batch_size=batch_size, backbone_model=backbone_model,
@@ -663,7 +814,10 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     if len(backbones) == 1:
         backbones = backbones*3
     print(f'list backbones:{backbones}')
-    model = build_model(backbones=backbones, dropout=dropout, after_concat=after_concat)
+    if name_model == 'gan_merge_features':
+        model = build_model(backbones=backbones, dropout=dropout, after_concat=after_concat)
+    elif name_model = 'gan_merge_predictions_v1':
+        model = build_model_v1(backbones=backbones, dropout=dropout, after_concat=after_concat)
     model = compile_model(model, learning_rate)
 
     temp_name_model = results_directory + new_results_id + "_model.h5"
@@ -730,14 +884,14 @@ def main(_argv):
         analyze_tf_dataset(test_dataset)
 
     elif mode == 'fit':
-        fit_model('initial_test', train_dataset, val_dataset=val_dataset, epochs=epochs)
+        fit_model(name_model, train_dataset, val_dataset=val_dataset, epochs=epochs)
         #fit_model(name_model, train_dataset, backbone_model, val_dataset=val_dataset, batch_size=batch_size,
         #          buffer_size=buffer_size)
 
 
 if __name__ == '__main__':
 
-    flags.DEFINE_string('name_model', '', 'name of the model')
+    flags.DEFINE_string('name_model', 'gan_merge_features', 'name of the model')
     flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf', 'analyze_dataset'],
                       'fit: model.fit, '
                       'eager_fit: model.fit(run_eagerly=True), '
