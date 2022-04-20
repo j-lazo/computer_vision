@@ -186,10 +186,11 @@ def generate_tf_dataset(x, y, batch_size=1, shuffle=False, buffer_size=10, prepr
     INPUT_SIZE = input_size
 
     dataset = tf.data.Dataset.from_tensor_slices((x, y))
-    dataset = dataset.map(tf_parser_npy)
-    dataset = dataset.batch(batch_size)
     if shuffle:
         dataset = dataset.shuffle(buffer_size=buffer_size * batch_size)
+
+    dataset = dataset.map(tf_parser_npy)
+    dataset = dataset.batch(batch_size)
     dataset = dataset.repeat()
 
     return dataset
@@ -816,10 +817,10 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     print(f'list backbones:{backbones}')
     if name_model == 'gan_merge_features':
         model = build_model(backbones=backbones, dropout=dropout, after_concat=after_concat)
-    elif name_model = 'gan_merge_predictions_v1':
+    elif name_model == 'gan_merge_predictions_v1':
         model = build_model_v1(backbones=backbones, dropout=dropout, after_concat=after_concat)
-    model = compile_model(model, learning_rate)
 
+    model = compile_model(model, learning_rate)
     temp_name_model = results_directory + new_results_id + "_model.h5"
     callbacks = [
         ModelCheckpoint(temp_name_model,
