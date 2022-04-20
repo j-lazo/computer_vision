@@ -828,6 +828,8 @@ def analyze_dataset_distribution(dataset_dir, plot_figure=False, dir_save_fig=''
             normalized_array[i][j] = class_cases_dict[case][key]/total_imgs[i]
             xticklabels = list(class_cases_dict[case].keys())
 
+    print(cases_ocurence)
+
     plt.figure()
     labels = np.asarray(plot_array).reshape(len(list_cases), len(unique_combinations))
     sns.heatmap(normalized_array, cmap='YlOrBr', cbar=False, linewidths=.5,
@@ -1209,7 +1211,14 @@ def analyze_dataset_multihead_pie_chart(dir_csv_file, headers=['imaging type', '
     ocurrences_all = [all_tissues.count(unique) for unique in np.unique(all_tissues)]
 
     print(np.unique(all_tissues))
-    print(ocurrences_all)
+    print('ALL:', ocurrences_all)
+    dictionary_all = {}
+
+    for i, unique_type in enumerate(np.unique(all_tissues)):
+        dictionary_all[unique_type] = ocurrences_all[i]
+
+    print('ALL', dictionary_all)
+
     fig1 = plt.figure(1, figsize=(12, 7))
     ax1 = fig1.add_subplot(131)
     ax1.pie(ocurrences_all, labels=np.unique(all_tissues), autopct='%.0f%%')
