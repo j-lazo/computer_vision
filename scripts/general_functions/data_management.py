@@ -1503,8 +1503,6 @@ def generate_annotations_npy_from_csv(directory_npy_data, csv_sample_file, outpu
             if npy_file.replace('.npz', '') in list_names:
                 index = list_names.index(npy_file.replace('.npz', ''))
                 row = new_df.iloc[index]
-                print(npy_file)
-                print(row)
                 row['image_name'] = npy_file
                 new_df.loc[index] = row
             else:
@@ -1514,6 +1512,39 @@ def generate_annotations_npy_from_csv(directory_npy_data, csv_sample_file, outpu
         output_file_name = directory_npy_data + output_name
     else:
         output_file_name = directory_npy_data + 'annotations_dataset.csv'
+
+    print(new_df)
+    new_df.to_csv(output_file_name, index=False)
+    print(f'file saved at {output_file_name}')
+
+
+def generate_annotations_augmented_dataset(directory_augmented_data, csv_sample_file, output_name=None):
+
+    df = pd.read_csv(csv_sample_file)
+    headers = list(df.columns)
+    new_df = pd.DataFrame(columns=headers)
+    list_names = df['image_name'].tolist()
+    list_names = [name.replace('.png', '') for name in list_names]
+    j = 0
+    list_sub_dirs = [f for f in os.listdir(directory_augmented_data) if os.path.isdir(directory_augmented_data + f)]
+    for sub_dir_name in list_sub_dirs:
+        sub_dir = os.path.join(directory_augmented_data, sub_dir_name)
+        list_files = os.listdir(sub_dir)
+        for i, augmented_file in enumerate(tqdm.tqdm(list_files[:], desc=f'Reading data in {sub_dir_name}')):
+            if augmented_file[:-8] in list_names:
+                index = list_names.index(augmented_file[:-8])
+                new_row = df.iloc[index].copy()
+                new_row['image_name'] = augmented_file
+                new_df.loc[j] = new_row
+                #print(new_df.loc[j])
+                j += 1
+            else:
+                print(f'match of {augmented_file} not found')
+
+    if output_name:
+        output_file_name = directory_augmented_data + output_name
+    else:
+        output_file_name = directory_augmented_data + 'annotations_dataset.csv'
 
     print(new_df)
     new_df.to_csv(output_file_name, index=False)
