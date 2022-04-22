@@ -68,11 +68,13 @@ def load_data_from_directory(path_data, csv_annotations=None):
     dictionary_labels = {}
 
     list_files = os.listdir(path_data)
-    csv_indir = [f for f in list_files if f.endswith('.csv')].pop()
+    csv_list = [f for f in list_files if f.endswith('.csv')]
+    if csv_list:
+        csv_indir = csv_list.pop()
     if csv_annotations:
         data_frame = pd.read_csv(csv_annotations)
-    elif csv_indir:
-        data_frame = pd.read_csv(os.path.join(path_data, csv_indir))
+    #elif csv_indir:
+    #    data_frame = pd.read_csv(os.path.join(path_data, csv_indir))
 
     list_unique_classes = np.unique([f for f in list_files if os.path.isdir(os.path.join(path_data, f))])
     """if data_frame:
@@ -268,6 +270,31 @@ def analyze_tf_dataset(dataset_dir, plot=True):
             plt.axis('off')
             plt.show()
 
+
+def load_model(directory_model):
+    if directory_model.endswith('.h5'):
+        model_path = directory_model
+    else:
+        files_dir = [f for f in os.listdir(directory_model) if f.endswith('.h5')]
+        if files_dir:
+            model_path = files_dir.pop()
+        else:
+            files_dir = [f for f in os.listdir(directory_model) if f.endswith('.pb')]
+            if files_dir:
+                model_path = ''
+                print(f'Tensorflow model found at {directory_model}')
+            else:
+                print(f'No model found in {directory_model}')
+
+    print('MODEL USED:')
+    print(model_path)
+    #model = tf.keras.models.load_model(model_path, compile=False)
+    print(f'Model path: {directory_model + model_path}')
+    model = tf.keras.models.load_model(directory_model + model_path)
+    model.summary()
+    input_size = (len(model.layers[0].output_shape[:]))
+
+    return model, input_size
 
 def load_pretrained_backbones(name_model, weights='imagenet', include_top=False, trainable=False, new_name=None):
     base_dir_weights = ''.join([os.getcwd(), '/scripts/classification/weights_pretrained_models/'])
@@ -723,7 +750,7 @@ def evaluate_and_predict(model, directory_to_evaluate, results_directory,
 def evalute_test_directory(model, test_data, results_directory, new_results_id, analyze_data=True):
 
     # determine if there are sub_folders or if it's the absolute path of the dataset
-    sub_dirs = os.listdir(test_data)
+    sub_dirs = [f for f in os.listdir(test_data) if os.path.isdir(test_data + f)]
     if sub_dirs:
         print(f'sub-directoires {sub_dirs} found in test foler')
         for sub_dir in sub_dirs:
@@ -817,7 +844,7 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     print(f'list backbones:{backbones}')
     if name_model == 'gan_merge_features':
         model = build_model(backbones=backbones, dropout=dropout, after_concat=after_concat)
-    elif name_model == 'gan_merge_predictions_v1':
+    elif name_model == 'gan_merge_predicts_v1':
         model = build_model_v1(backbones=backbones, dropout=dropout, after_concat=after_concat)
 
     model = compile_model(model, learning_rate)
@@ -869,6 +896,27 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     #                           )
 
 
+def predict(directory_model, file_to_predict):
+
+    model, _ = load_model(directory_model)
+    #if daa.check_file_isvid(file_to_predic):
+    #    pass
+    # elif os.path.isdir(file_to_predic):
+    if os.path.isdir(file_to_predict):
+        new_results_id = generate_experiment_ID(prediction_model=os.path.basename(os.path.normpath(directory_model)))
+        results_directory = directory_model
+        print(f'Test directory found at: {file_to_predict}')
+        evalute_test_directory(model, file_to_predict, results_directory, new_results_id,
+                               )
+    elif file_to_predict == 'webcam':
+        pass
+
+    else:
+        print(f'Format or dir {file_to_predict} not understood')
+
+    pass
+
+
 def main(_argv):
 
     name_model = FLAGS.name_model
@@ -880,6 +928,8 @@ def main(_argv):
     batch_size = FLAGS.batch_size
     buffer_size = FLAGS.buffer_size
     epochs = FLAGS.epochs
+    directory_model = FLAGS.directory_model
+    file_to_predic = FLAGS.file_to_predic
 
     if mode == 'analyze_dataset':
         analyze_tf_dataset(test_dataset)
@@ -888,14 +938,17 @@ def main(_argv):
         fit_model(name_model, train_dataset, val_dataset=val_dataset, epochs=epochs)
         #fit_model(name_model, train_dataset, backbone_model, val_dataset=val_dataset, batch_size=batch_size,
         #          buffer_size=buffer_size)
+    elif mode == 'predict':
+        predict(directory_model, file_to_predic)
 
 
 if __name__ == '__main__':
 
     flags.DEFINE_string('name_model', 'gan_merge_features', 'name of the model')
-    flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf', 'analyze_dataset'],
+    flags.DEFINE_enum('mode', 'fit', ['fit', 'eager_fit', 'eager_tf', 'analyze_dataset', 'predict'],
                       'fit: model.fit, '
                       'eager_fit: model.fit(run_eagerly=True), '
+                      'predict: predict in a dataset given a model'
                       'eager_tf: custom GradientTape,'
                       'analyze_dataset: analyze_dataset')
     flags.DEFINE_string('backbone', None, 'backbone network')
