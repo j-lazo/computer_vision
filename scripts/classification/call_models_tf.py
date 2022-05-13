@@ -15,6 +15,8 @@ from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Nadam
 import pandas as pd
 import tqdm
 import time
+from tensorflow import keras
+import tensorflow_addons as tfa
 
 
 def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', backbone_model='',
@@ -296,6 +298,7 @@ def load_model(directory_model):
 
     return model, input_size
 
+
 def load_pretrained_backbones(name_model, weights='imagenet', include_top=False, trainable=False, new_name=None):
     base_dir_weights = ''.join([os.getcwd(), '/scripts/classification/weights_pretrained_models/'])
     """
@@ -371,6 +374,147 @@ def load_pretrained_backbones(name_model, weights='imagenet', include_top=False,
     new_base_model = tf.keras.models.clone_model(base_model)
     new_base_model.set_weights(base_model.get_weights())
     return new_base_model
+
+class Checkpoint:
+    """Enhanced "tf.train.Checkpoint"."""
+
+    def __init__(self,
+                 checkpoint_kwargs,  # for "tf.train.Checkpoint"
+                 directory,  # for "tf.train.CheckpointManager"
+                 max_to_keep=5,
+                 keep_checkpoint_every_n_hours=None):
+        self.checkpoint = tf.train.Checkpoint(**checkpoint_kwargs)
+        self.manager = tf.train.CheckpointManager(self.checkpoint, directory, max_to_keep, keep_checkpoint_every_n_hours)
+
+    def restore(self, save_path=None):
+        save_path = self.manager.latest_checkpoint if save_path is None else save_path
+        return self.checkpoint.restore(save_path)
+
+    def save(self, file_prefix_or_checkpoint_number=None, session=None):
+        if isinstance(file_prefix_or_checkpoint_number, str):
+            return self.checkpoint.save(file_prefix_or_checkpoint_number, session=session)
+        else:
+            return self.manager.save(checkpoint_number=file_prefix_or_checkpoint_number)
+
+    def __getattr__(self, attr):
+        if hasattr(self.checkpoint, attr):
+            return getattr(self.checkpoint, attr)
+        elif hasattr(self.manager, attr):
+            return getattr(self.manager, attr)
+        else:
+            self.__getattribute__(attr)  # this will raise an exception
+
+
+def _check(images, dtypes, min_value=-np.inf, max_value=np.inf):
+    # check type
+    assert isinstance(images, np.ndarray), '`images` should be np.ndarray!'
+
+    # check dtype
+    dtypes = dtypes if isinstance(dtypes, (list, tuple)) else [dtypes]
+    assert images.dtype in dtypes, 'dtype of `images` shoud be one of %s!' % dtypes
+
+    # check nan and inf
+    assert np.all(np.isfinite(images)), '`images` contains NaN or Inf!'
+
+    # check value
+    if min_value not in [None, -np.inf]:
+        l = '[' + str(min_value)
+    else:
+        l = '(-inf'
+        min_value = -np.inf
+    if max_value not in [None, np.inf]:
+        r = str(max_value) + ']'
+    else:
+        r = 'inf)'
+        max_value = np.inf
+    assert np.min(images) >= min_value and np.max(images) <= max_value, \
+        '`images` should be in the range of %s!' % (l + ',' + r)
+
+
+def to_range(images, min_value=0.0, max_value=1.0, dtype=None):
+    """Transform images from [-1.0, 1.0] to [min_value, max_value] of dtype."""
+    _check(images, [np.float32, np.float64], -1.0, 1.0)
+    dtype = dtype if dtype else images.dtype
+    return ((images + 1.) / 2. * (max_value - min_value) + min_value).astype(dtype)
+
+
+
+def _map_fn(img, crop_size=32):  # preprocessing
+    img = tf.image.resize(img, [crop_size, crop_size])
+    # or img = tf.image.resize(img, [load_size, load_size]); img = tl.center_crop(img, crop_size)
+    img = tf.clip_by_value(img, 0, 255) / 255.0
+    # or img = tl.minmax_norm(img)
+    img = img * 2 - 1
+    return img
+
+
+def _get_norm_layer(norm):
+    if norm == 'none':
+        return lambda: lambda x: x
+    elif norm == 'batch_norm':
+        return keras.layers.BatchNormalization
+    elif norm == 'instance_norm':
+        return tfa.layers.InstanceNormalization
+    elif norm == 'layer_norm':
+        return keras.layers.LayerNormalization
+
+
+def ResnetGenerator(input_shape=(256, 256, 3),
+                    output_channels=3,
+                    dim=64,
+                    n_downsamplings=2,
+                    n_blocks=9,
+                    norm='instance_norm'):
+    Norm = _get_norm_layer(norm)
+
+    def _residual_block(x):
+        dim = x.shape[-1]
+        h = x
+
+        h = tf.pad(h, [[0, 0], [1, 1], [1, 1], [0, 0]], mode='REFLECT')
+        h = keras.layers.Conv2D(dim, 3, padding='valid', use_bias=False)(h)
+        h = Norm()(h)
+        h = tf.nn.relu(h)
+
+        h = tf.pad(h, [[0, 0], [1, 1], [1, 1], [0, 0]], mode='REFLECT')
+        h = keras.layers.Conv2D(dim, 3, padding='valid', use_bias=False)(h)
+        h = Norm()(h)
+
+        return keras.layers.add([x, h])
+
+    # 0
+    h = inputs = keras.Input(shape=input_shape)
+
+    # 1
+    h = tf.pad(h, [[0, 0], [3, 3], [3, 3], [0, 0]], mode='REFLECT')
+    h = keras.layers.Conv2D(dim, 7, padding='valid', use_bias=False)(h)
+    h = Norm()(h)
+    h = tf.nn.relu(h)
+
+    # 2
+    for _ in range(n_downsamplings):
+        dim *= 2
+        h = keras.layers.Conv2D(dim, 3, strides=2, padding='same', use_bias=False)(h)
+        h = Norm()(h)
+        h = tf.nn.relu(h)
+
+    # 3
+    for _ in range(n_blocks):
+        h = _residual_block(h)
+
+    # 4
+    for _ in range(n_downsamplings):
+        dim //= 2
+        h = keras.layers.Conv2DTranspose(dim, 3, strides=2, padding='same', use_bias=False)(h)
+        h = Norm()(h)
+        h = tf.nn.relu(h)
+
+    # 5
+    h = tf.pad(h, [[0, 0], [3, 3], [3, 3], [0, 0]], mode='REFLECT')
+    h = keras.layers.Conv2D(output_channels, 7, padding='valid')(h)
+    h = tf.tanh(h)
+
+    return keras.Model(inputs=inputs, outputs=h)
 
 
 def build_model_v1(backbones=['resnet101', 'resnet101', 'resnet101'], after_concat='globalpooling',
@@ -592,6 +736,138 @@ def multi_output_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_
     output_l4 = Dense(5, activation='softmax')(l4)
 
     return Model(inputs=input_model, outputs=[output_layer, output_l1, output_l2, output_l3, output_l4], name='multi_input_output_classification')
+
+
+def build_generator_base(G_A2B, G_B2A):
+
+    input_model = Input((256, 256, 3))
+    t_input = Input(shape=(1,), dtype=tf.int32, name="t_input")
+
+    # branch 1 if target domain is NBI
+    c1 = G_A2B(input_model)
+    r1 = G_B2A(c1)
+    #x1 = [c1, r1]
+
+    # branch 2 if target domain is WLI
+    c2 = G_B2A(input_model)
+    r2 = G_A2B(c2)
+    #x2 = [c2, r2]
+
+    c = tf.keras.backend.switch(t_input, c1, c2)
+    r = tf.keras.backend.switch(t_input, r1, r2)
+    output_layer = [c, r]
+    return Model(inputs=[t_input, input_model], outputs=output_layer, name='multi_input_output_classification')
+
+
+def build_gan_model_merge_out():
+    pass
+
+
+def build_gan_model_features(backbones=['resnet101', 'resnet101', 'resnet101'], after_concat='globalpooling',
+                dropout=False, gan_base='checkpoint_charlie'):
+
+    input_sizes_models = {'vgg16': (224, 224), 'vgg19': (224, 224), 'inception_v3': (299, 299),
+                          'resnet50': (224, 224), 'resnet101': (224, 244), 'mobilenet': (224, 224),
+                          'densenet121': (224, 224), 'xception': (299, 299)}
+    checkpoint_dir = ''.join([os.getcwd(), '/scripts/gan_models/CycleGan/sample_weights/', gan_base])
+
+    # Generator Models
+    G_A2B = ResnetGenerator(input_shape=(256, 256, 3))
+    G_B2A = ResnetGenerator(input_shape=(256, 256, 3))
+
+    Checkpoint(dict(G_A2B=G_A2B, G_B2A=G_B2A), checkpoint_dir).restore()
+    num_backbones = len(backbones)
+
+    input_image = Input((256, 256, 3))
+    t_input = Input(shape=(1,), dtype=tf.int32, name="t_input")
+
+    # branch 1 if target domain is NBI
+    c1 = G_A2B(input_image)
+    r1 = G_B2A(c1)
+    # x1 = [c1, r1]
+
+    # branch 2 if target domain is WLI
+    c2 = G_B2A(input_image)
+    r2 = G_A2B(c2)
+    # x2 = [c2, r2]
+
+    c = tf.keras.backend.switch(t_input, c1, c2)
+    r = tf.keras.backend.switch(t_input, r1, r2)
+
+    input_backbone_1 = input_image
+    input_backbone_2 = c
+    input_backbone_3 = r
+    b1 = tf.image.resize(input_image, input_sizes_models[backbones[0]], method='bilinear')
+
+    if backbones[0] == 'resnet101':
+        b1 = tf.keras.applications.resnet.preprocess_input(b1)
+    elif backbones[0] == 'resnet50':
+        b1 = tf.keras.applications.resnet50.preprocess_input(b1)
+    elif backbones[0] == 'densenet121':
+        b1 = tf.keras.applications.densenet.preprocess_input(b1)
+    elif backbones[0] == 'vgg19':
+        b1 = tf.keras.applications.vgg19.preprocess_input(b1)
+    elif backbones[0] == 'inception_v3':
+        b1 = tf.keras.applications.inception_v3.preprocess_input(b1)
+
+    backbone_model_1 = load_pretrained_backbones(backbones[0])
+    backbone_model_1._name = 'backbone_1'
+    for layer in backbone_model_1.layers:
+        layer.trainable = False
+    b1 = backbone_model_1(b1)
+
+    b2 = tf.image.resize(input_backbone_2, input_sizes_models[backbones[1]], method='bilinear')
+    if backbones[1] == 'resnet101':
+        b2 = tf.keras.applications.resnet.preprocess_input(b2)
+    elif backbones[1] == 'resnet50':
+        b2 = tf.keras.applications.resnet50.preprocess_input(b2)
+    elif backbones[1] == 'densenet121':
+        b2 = tf.keras.applications.densenet.preprocess_input(b2)
+    elif backbones[1] == 'vgg19':
+        b2 = tf.keras.applications.vgg19.preprocess_input(b2)
+    elif backbones[1] == 'inception_v3':
+        b2 = tf.keras.applications.inception_v3.preprocess_input(b2)
+    backbone_model_2 = load_pretrained_backbones(backbones[1])
+    backbone_model_2._name = 'backbone_2'
+    for layer in backbone_model_2.layers:
+        layer.trainable = False
+    b2 = backbone_model_2(b2)
+    if num_backbones == 3:
+        b3 = tf.image.resize(input_backbone_3, input_sizes_models[backbones[2]], method='bilinear')
+        if backbones[2] == 'resnet101':
+            b3 = tf.keras.applications.resnet.preprocess_input(b3)
+        elif backbones[2] == 'resnet50':
+            b3 = tf.keras.applications.resnet50.preprocess_input(b3)
+        elif backbones[2] == 'densenet121':
+            b3 = tf.keras.applications.densenet.preprocess_input(b3)
+        elif backbones[2] == 'vgg19':
+            b3 = tf.keras.applications.vgg19.preprocess_input(b3)
+        elif backbones[2] == 'inception_v3':
+            b3 = tf.keras.applications.inception_v3.preprocess_input(b3)
+        backbone_model_3 = load_pretrained_backbones(backbones[2])
+        backbone_model_3._name = 'backbone_3'
+        for layer in backbone_model_3.layers:
+            layer.trainable = False
+        b3 = backbone_model_3(b3)
+        x = Concatenate()([b1, b2, b3])
+
+    else:
+        x = Concatenate()([b1, b2])
+    if after_concat == 'globalpooling':
+        x = GlobalAveragePooling2D()(x)
+    else:
+        x = Flatten()(x)
+    x = Dense(1024, activation='relu')(x)
+    if dropout:
+        x = Dropout(0.5)(x)
+    x = Dense(2048, activation='relu')(x)
+    if dropout:
+        x = Dropout(0.5)(x)
+    x = Dense(2048, activation='relu')(x)
+    x = Flatten()(x)
+    output_layer = Dense(5, activation='softmax')(x)
+
+    return Model(inputs=[t_input, input_image], outputs=output_layer, name='gan_merge_classification')
 
 
 def build_model(backbones=['resnet101', 'resnet101', 'resnet101'], after_concat='globalpooling',
@@ -842,10 +1118,16 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     if len(backbones) == 1:
         backbones = backbones*3
     print(f'list backbones:{backbones}')
-    if name_model == 'gan_merge_features':
+    if name_model == 'pre_built_dataset_merge_features':
         model = build_model(backbones=backbones, dropout=dropout, after_concat=after_concat)
-    elif name_model == 'gan_merge_predicts_v1':
+    elif name_model == 'pre_built_dataset_merge_predicts_v1':
         model = build_model_v1(backbones=backbones, dropout=dropout, after_concat=after_concat)
+    elif name_model == 'gan_merge_features':
+        model = build_gan_model_features(backbones=backbones, gan_base='checkpoint_charlie',
+                                        dropout=dropout, after_concat=after_concat)
+    elif name_model == 'gan_merge_predicts_v1':
+        model = build_gan_model_merge_out(backbones=backbones, gan_base='checkpoint_charlie',
+                                         dropout=dropout, after_concat=after_concat)
 
     model = compile_model(model, learning_rate)
     temp_name_model = results_directory + new_results_id + "_model.h5"
@@ -894,6 +1176,122 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     #if test_data != '':
     #    evalute_test_directory(model, test_data, results_directory, new_results_id,
     #                           )
+
+
+def train_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_dir=os.getcwd() + '/results/', backbone_model=None,
+              val_dataset=None, eval_val_set=None, eval_train_set=False, test_data=None,
+              batch_size=16, buffer_size=50, backbones=['restnet50'], dropout=False, after_concat='globalpooling'):
+
+    if len(backbones) > 3:
+        raise ValueError('number maximum of backbones is 3!')
+    mode = ''.join(['fit_dop_', str(dropout), '_', after_concat, '_'])
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+    # Decide how to act according to the mode (train/predict/train-backbone... )
+    files_dataset_directory = [f for f in os.listdir(dataset_dir)]
+    if 'train' in files_dataset_directory:
+        path_train_dataset = os.path.join(dataset_dir, 'train')
+    else:
+        path_train_dataset = dataset_dir
+
+    if 'val' in files_dataset_directory:
+        path_val_dataset = os.path.join(dataset_dir, 'val')
+    elif val_dataset:
+        path_val_dataset = val_dataset
+    else:
+        raise 'Validation directory not found'
+
+    print(f'train directory found at: {path_train_dataset}')
+    print(f'validation directory found at: {path_train_dataset}')
+
+    train_x, train_y, dictionary_train = load_data_from_directory(path_train_dataset)
+    train_dataset = generate_tf_dataset(train_x, train_y, batch_size=batch_size, shuffle=True,
+                                       buffer_size=buffer_size)
+
+    val_x, val_y, dictionary_val = load_data_from_directory(path_val_dataset)
+    val_dataset = generate_tf_dataset(val_x, val_y, batch_size=batch_size, shuffle=True,
+                                       buffer_size=buffer_size)
+
+    train_steps = len(train_x) // batch_size
+    val_steps = len(val_x) // batch_size
+
+    if len(train_x) % batch_size != 0:
+        train_steps += 1
+    if len(val_x) % batch_size != 0:
+        val_steps += 1
+
+    # define a dir to save the results and Checkpoints
+    # if results directory doesn't exist create it
+    if not os.path.isdir(results_dir):
+        os.mkdir(results_dir)
+
+    # ID name for the folder and results
+    backbone_model = ''.join([name_model + '_' for name_model in backbones])
+    new_results_id = generate_experiment_ID(name_model=name_model, learning_rate=learning_rate,
+                                            batch_size=batch_size, backbone_model=backbone_model,
+                                            mode=mode)
+
+    results_directory = ''.join([results_dir, new_results_id, '/'])
+    # if results experiment doesn't exists create it
+    if not os.path.isdir(results_directory):
+        os.mkdir(results_directory)
+
+    # Build the model
+    if len(backbones) == 1:
+        backbones = backbones*3
+    print(f'list backbones:{backbones}')
+    if name_model == 'gan_merge_features':
+        model = build_model(backbones=backbones, dropout=dropout, after_concat=after_concat)
+    elif name_model == 'gan_merge_predicts_v1':
+        model = build_model_v1(backbones=backbones, dropout=dropout, after_concat=after_concat)
+
+    model = compile_model(model, learning_rate)
+
+
+    # Instantiate a loss function.
+    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    # Prepare the metrics.
+    train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+    val_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+
+    for epoch in range(epochs):
+        print("\nStart of epoch %d" % (epoch,))
+        start_time = time.time()
+
+        # Iterate over the batches of the dataset.
+        for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
+            with tf.GradientTape() as tape:
+                logits = model(x_batch_train, training=True)
+                loss_value = loss_fn(y_batch_train, logits)
+            grads = tape.gradient(loss_value, model.trainable_weights)
+            optimizer.apply_gradients(zip(grads, model.trainable_weights))
+
+            # Update training metric.
+            train_acc_metric.update_state(y_batch_train, logits)
+
+            # Log every 200 batches.
+            if step % 200 == 0:
+                print(
+                    "Training loss (for one batch) at step %d: %.4f"
+                    % (step, float(loss_value))
+                )
+                print("Seen so far: %d samples" % ((step + 1) * batch_size))
+
+        # Display metrics at the end of each epoch.
+        train_acc = train_acc_metric.result()
+        print("Training acc over epoch: %.4f" % (float(train_acc),))
+
+        # Reset training metrics at the end of each epoch
+        train_acc_metric.reset_states()
+
+        # Run a validation loop at the end of each epoch.
+        for x_batch_val, y_batch_val in val_dataset:
+            val_logits = model(x_batch_val, training=False)
+            # Update val metrics
+            val_acc_metric.update_state(y_batch_val, val_logits)
+        val_acc = val_acc_metric.result()
+        val_acc_metric.reset_states()
+        print("Validation acc: %.4f" % (float(val_acc),))
+        print("Time taken: %.2fs" % (time.time() - start_time))
 
 
 def predict(directory_model, file_to_predict):
