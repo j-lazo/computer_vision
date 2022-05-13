@@ -16,6 +16,7 @@ import cv2
 
 import skimage.io as iio
 
+
 def _check(images, dtypes, min_value=-np.inf, max_value=np.inf):
     # check type
     assert isinstance(images, np.ndarray), '`images` should be np.ndarray!'
@@ -94,19 +95,6 @@ def imread(path):
     img = tf.image.decode_png(img, 3)
 
     return img
-
-"""def imread(path, as_gray=False, **kwargs):
-    #Return a float64 image in [-1.0, 1.0].
-    image = iio.imread(path, as_gray, **kwargs)
-    if image.dtype == np.uint8:
-        image = image / 127.5 - 1
-    elif image.dtype == np.uint16:
-        image = image / 32767.5 - 1
-    elif image.dtype in [np.float32, np.float64]:
-        image = image * 2 - 1.0
-    else:
-        raise Exception("Inavailable image dtype: %s!" % image.dtype)
-    return image"""
 
 
 def _map_fn(img, crop_size=32):  # preprocessing
@@ -216,20 +204,12 @@ class Checkpoint:
             self.__getattribute__(attr)  # this will raise an exception
 
 
-#@tf.function
-#def sample_A2B(A):
-#    A2B = G_A2B(A, training=False)
-#    A2B2A = G_B2A(A2B, training=False)
-#    return A2B, A2B2A
-
-#@tf.function
 def build_complete_model(G_A2B, G_B2A, target_domain='nbi'):
   input_sizes_models = {'vgg16': (224, 224), 'vgg19': (224, 224), 'inception_v3': (299, 299),
                           'resnet50': (224, 224), 'resnet101': (224, 244), 'mobilenet': (224, 224),
                           'densenet121': (224, 224), 'xception': (299, 299)}
   input_model = Input((256, 256, 3))
-  c = G_A2B(input_model)
-  r = G_B2A(c)
+
   if target_domain == 'nbi':
     c = G_A2B(input_model)
     r = G_B2A(c)
@@ -238,8 +218,6 @@ def build_complete_model(G_A2B, G_B2A, target_domain='nbi'):
     r = G_A2B(c)
 
   output_layer = [c, r]
-  # classifier 1
-  # classifier 2
   return Model(inputs=input_model, outputs=output_layer, name='multi_input_output_classification')
 
 
@@ -257,13 +235,6 @@ def main(_argv):
 
     Checkpoint(dict(G_A2B=G_A2B, G_B2A=G_B2A), checkpoint_dir).restore()
 
-    # model = tf.keras.models.load_model(checkpoint_dir)
-    # loaded = tf.saved_model.load(checkpoint_dir)
-    # Load the previously saved weights
-    # model.load_model(latest)
-    # model.summary()
-
-    # 2DO, add classifier
     model = build_complete_model(G_A2B, G_B2A, target_domain)
     model.summary()
     model.compile(optimizer=Adam(learning_rate=0.0001), loss='categorical_crossentropy', metrics='accuracy')
@@ -325,19 +296,6 @@ def main(_argv):
 
             print(np.shape(input2_c), class_c2, unique_classes[np.argmax(class_c2)])
             print(np.shape(input2_r), class_r2, unique_classes[np.argmax(class_r2)])
-
-            """print(np.amin(c), np.amax(c))
-            print(np.amin(r), np.amax(r))
-            print(np.amin(input_c), np.amax(input_c))
-            print(np.amin(input_r), np.amax(input_r))
-            print(np.amin(input2_c), np.amax(input2_c))
-            print(np.amin(input2_r), np.amax(input2_r))"""
-
-            #print(np.unique(input_c))
-            #print(np.unique(input2_c))
-
-            print((class_c2 == class_c).all())
-            print((class_r2 == class_r).all())
 
             img_mix = np.concatenate([plot_original, c, r], axis=1)
             plt.figure()
