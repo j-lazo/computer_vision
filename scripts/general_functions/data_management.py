@@ -1551,6 +1551,37 @@ def generate_annotations_augmented_dataset(directory_augmented_data, csv_sample_
     print(f'file saved at {output_file_name}')
 
 
+def extract_grames_GI_dataset(folder_dir):
+    list_videos = [f for f in os.listdir(folder_dir) if f.endswith('.mp4')]
+
+    case_name = folder_dir.split('/')[-2]
+
+    for video in list_videos:
+        path_video = folder_dir + video
+        cap = cv2.VideoCapture(path_video)
+        name_video = video.replace('.mp4', '')
+
+        if not os.path.isdir(folder_dir + name_video):
+            os.mkdir(folder_dir + name_video)
+
+        if not cap.isOpened():
+            print("could not open :", path_video)
+            return
+
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        percent = 0.03
+        for frame_no in tqdm.tqdm(range(total_frames), desc=f'Extracting frames from video {path_video}'):
+            if random.random() < percent:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no-1)
+                res, frame = cap.read()
+                frame_name = ''.join([case_name, '_', name_video, '_frame_', str(frame_no).zfill(4), '.png'])
+                resized = cv2.resize(frame, (300, 300))
+                print(frame_name)
+                img_dir = os.path.join(folder_dir, name_video, frame_name)
+                cv2.imwrite(img_dir, resized)
+
+
+
 if __name__ == "__main__":
     path_dir = ''
     reshape_data_blocks(path_dir)
