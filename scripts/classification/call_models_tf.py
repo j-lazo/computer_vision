@@ -17,6 +17,7 @@ import tqdm
 import time
 from tensorflow import keras
 import tensorflow_addons as tfa
+import cv2
 
 
 def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', backbone_model='',
@@ -51,6 +52,56 @@ def generate_experiment_ID(name_model='', learning_rate='na', batch_size='na', b
         id_name = ''.join([prediction_model, '_predictions_', predictions_date_time.strftime("%d_%m_%Y_%H_%M")])
 
     return id_name
+
+
+def load_data_from_directory_v1(path_data, csv_annotations=None):
+    """
+        Give a path, creates two lists with the
+        Parameters
+        ----------
+        path_data :
+
+        Returns
+        -------
+
+        """
+
+    images_path = list()
+    labels_class = list()
+    labels_domain = list()
+    dictionary_labels = {}
+
+    list_files = os.listdir(path_data)
+    csv_list = [f for f in list_files if f.endswith('.csv')]
+    if csv_list:
+        csv_indir = csv_list.pop()
+    if csv_annotations:
+        data_frame = pd.read_csv(csv_annotations)
+        list_imgs = data_frame['image_name'].tolist()
+        list_classes = data_frame['tissue type'].tolist()
+        list_domain = data_frame['imaging type'].tolist()
+
+    list_unique_classes = np.unique(list_classes)
+    list_unique_domains = np.unique(list_domain)
+    list_files = list()
+    list_path_files = list()
+
+    for (dirpath, dirnames, filenames) in os.walk(path_data):
+        list_files += [file for file in filenames]
+        list_path_files += [os.path.join(dirpath, file) for file in filenames]
+
+    for j, file in enumerate(list_imgs):
+        if file in list_files:
+            new_dictionary_labels = {file: {'image_name': file, 'path_file': list_path_files[j],
+                                            'img_class': list_classes[j], 'img_domain': list_domain[j]}}
+            dictionary_labels = {**dictionary_labels, **new_dictionary_labels}
+        else:
+            list_files.remove(file)
+
+    print(f'Found {len(list_path_files)} images corresponding to {len(list_unique_classes)} classes and '
+          f'{len(list_unique_domains)} domains at: {path_data}')
+
+    return list_files, dictionary_labels
 
 
 def load_data_from_directory(path_data, csv_annotations=None):
@@ -150,6 +201,14 @@ def read_stacked_images_npy_predict(path_data):
     img = img.astype(np.float64)
     return img
 
+
+def imread_tf(path):
+    img = tf.io.read_file(path)
+    img = tf.image.decode_png(img, 3)
+
+    return _map_fn(img, crop_size=256)
+
+
 def tf_parser_npy(x, y):
 
     def _parse(x, y):
@@ -163,6 +222,104 @@ def tf_parser_npy(x, y):
     x.set_shape([3, 256, 256, 3])
     y.set_shape([NUM_CLASSES])
     return x, y
+
+
+def tf_parser_v2(x, y):
+    # x is the key name in the dictionary y
+    # y contains the name of the image, the path, the class and the domain of the image
+    def _parse(x1, x2, y):
+        img = imread_tf(x1.decode())
+        out_y = np.zeros(NUM_CLASSES)
+        x2_out = [float(x2)]
+        out_y[y] = 1.
+        out_y = out_y.astype(np.float64)
+        return img, x2_out, out_y
+
+    x1 = x['input_1']
+    x2 = x['input_2']
+    x1, x2, y = tf.numpy_function(_parse, [x1, x2, y], [tf.float64, tf.float64, tf.float64])
+    x1.set_shape([256, 256, 3])
+    x2.set_shape([1])
+    y.set_shape([NUM_CLASSES])
+    x_out = {"input_1": x1, "input_2": x2}
+    return x_out, y
+
+
+def tf_parser_v1(x, y):
+    # x is the key name in the dictionary y
+    # y contains the name of the image, the path, the class and the domain of the image
+    def _parse(x, y):
+        img = imread_tf(x.decode())
+        out_y = np.zeros(NUM_CLASSES)
+        out_y[y] = 1.
+        out_y = out_y.astype(np.float64)
+        print(type(y))
+        print(type(x))
+        return img, out_y
+
+    x = imread_tf(x)
+    x, y = tf.numpy_function(_parse, [x, y], [tf.float64, tf.float64])
+    print(type(x))
+    print(type(y))
+
+    x.set_shape([256, 256, 3])
+    y.set_shape([NUM_CLASSES])
+    return x, y
+
+
+def generate_tf_dataset_v1(list_x, dictionary_info, batch_size=1, shuffle=False, buffer_size=10, preprocess_function=None,
+                        input_size=(256, 256)):
+
+    """
+    Generates a tf dataset asd described in https://www.tensorflow.org/api_docs/python/tf/data/Dataset
+    Parameters
+    ----------
+    x : (list of strings) input data
+    y : (list of int) target labels
+    batch_size : int
+    shuffle : (bool)
+
+    Returns
+    -------
+    tensorflow Dataset
+    """
+    global PREPROCESS_FUNCTION
+    global INPUT_SIZE
+    global NUM_CLASSES
+    global NUM_DOMAIS
+    global UNIQUE_CLASSES
+    global UNIQUE_DOMAINS
+
+    path_imgs = list()
+    images_class = list()
+    images_domains = list()
+    for img_name in list_x:
+        path_imgs.append(dictionary_info[img_name]['path_file'])
+        images_class.append(dictionary_info[img_name]['img_class'])
+        images_domains.append(dictionary_info[img_name]['img_domain'])
+
+    UNIQUE_CLASSES = np.unique(images_class)
+    UNIQUE_DOMAINS = np.unique(images_domains)
+
+    NUM_CLASSES = len(UNIQUE_CLASSES)
+    NUM_DOMAINS = len(UNIQUE_DOMAINS)
+    PREPROCESS_FUNCTION = preprocess_function
+    INPUT_SIZE = input_size
+
+    images_domains = [list(UNIQUE_DOMAINS).index(val) for val in images_domains]
+    images_class = [list(UNIQUE_CLASSES).index(val) for val in images_class]
+
+
+    #dataset = tf.data.Dataset.from_tensor_slices({"input_1": path_imgs, "input_2": images_domains}, images_class)
+    dataset = tf.data.Dataset.from_tensor_slices((path_imgs, images_class))
+    if shuffle:
+        dataset = dataset.shuffle(buffer_size=buffer_size * batch_size)
+
+    dataset = dataset.map(tf_parser_v1)
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.repeat()
+
+    return dataset
 
 
 def generate_tf_dataset(x, y, batch_size=1, shuffle=False, buffer_size=10, preprocess_function=None,
@@ -438,11 +595,10 @@ def to_range(images, min_value=0.0, max_value=1.0, dtype=None):
     return ((images + 1.) / 2. * (max_value - min_value) + min_value).astype(dtype)
 
 
-
 def _map_fn(img, crop_size=32):  # preprocessing
     img = tf.image.resize(img, [crop_size, crop_size])
     # or img = tf.image.resize(img, [load_size, load_size]); img = tl.center_crop(img, crop_size)
-    img = tf.clip_by_value(img, 0, 255) / 255.0
+    img = tf.clip_by_value(img, 0, 255) / 255.
     # or img = tl.minmax_norm(img)
     img = img * 2 - 1
     return img
@@ -1080,15 +1236,42 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
         raise 'Validation directory not found'
 
     print(f'train directory found at: {path_train_dataset}')
-    print(f'validation directory found at: {path_train_dataset}')
+    print(f'validation directory found at: {path_val_dataset}')
 
-    train_x, train_y, dictionary_train = load_data_from_directory(path_train_dataset)
-    train_dataset = generate_tf_dataset(train_x, train_y, batch_size=batch_size, shuffle=True,
-                                       buffer_size=buffer_size)
+    if mode == 'pre_built_dataset_merge_features' or mode == 'pre_built_dataset_merge_predicts_v1':
+        train_x, train_y, dictionary_train = load_data_from_directory(path_train_dataset)
+        train_dataset = generate_tf_dataset(train_x, train_y, batch_size=batch_size, shuffle=True,
+                                           buffer_size=buffer_size)
 
-    val_x, val_y, dictionary_val = load_data_from_directory(path_val_dataset)
-    val_dataset = generate_tf_dataset(val_x, val_y, batch_size=batch_size, shuffle=True,
-                                       buffer_size=buffer_size)
+        val_x, val_y, dictionary_val = load_data_from_directory(path_val_dataset)
+        val_dataset = generate_tf_dataset(val_x, val_y, batch_size=batch_size, shuffle=True,
+                                           buffer_size=buffer_size)
+    else:
+        csv_file_train = [f for f in os.listdir(path_train_dataset) if f.endswith('.csv')].pop()
+        path_csv_file_train = os.path.join(path_train_dataset, csv_file_train)
+        train_x, dictionary_train = load_data_from_directory_v1(path_train_dataset,
+                                                                         csv_annotations=path_csv_file_train)
+        train_dataset = generate_tf_dataset_v1(train_x, dictionary_train, batch_size=batch_size, shuffle=True,
+                                            buffer_size=buffer_size)
+
+        for j, element in enumerate(train_dataset):
+            print(j)
+            print(element)
+            x, y = element
+            print(type(x))
+            print(type(y))
+            x_array = x.numpy()
+            y_array = y.numpy()
+            print('x:', np.shape(x_array), np.amin(x_array), np.amax(x_array))
+            print('y:', np.shape(y_array), np.unique(y_array))
+
+        dataset = train_dataset.batch(2, drop_remainder=True)
+
+        csv_file_val = [f for f in os.listdir(path_val_dataset) if f.endswith('.csv')].pop()
+        path_csv_file_val = os.path.join(path_val_dataset, csv_file_val)
+        val_x, dictionary_val = load_data_from_directory_v1(path_val_dataset, csv_annotations=path_csv_file_val)
+        val_dataset = generate_tf_dataset_v1(val_x, dictionary_val, batch_size=batch_size, shuffle=True,
+                                          buffer_size=buffer_size)
 
     train_steps = len(train_x) // batch_size
     val_steps = len(val_x) // batch_size
@@ -1177,6 +1360,51 @@ def fit_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_
     #    evalute_test_directory(model, test_data, results_directory, new_results_id,
     #                           )
 
+    
+def make_dataset(path, batch_size):
+
+  def parse_image(filename):
+    image = tf.io.read_file(filename)
+    image = tf.image.decode_png(image, channels=3)
+    image = tf.image.resize(image, [256, 256])
+    return image
+
+  def configure_for_performance(ds):
+    ds = ds.shuffle(buffer_size=1000)
+    ds = ds.batch(batch_size)
+    ds = ds.repeat()
+    ds = ds.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    return ds
+
+  path_imgs = list()
+  images_class = list()
+  images_domains = list()
+  csv_annotations_file = [path + f for f in os.listdir(path) if f.endswith('.csv')].pop()
+  list_files, dictionary_labels = load_data_from_directory_v1(path, csv_annotations=csv_annotations_file)
+  for img_name in list_files:
+    path_imgs.append(dictionary_labels[img_name]['path_file'])
+    images_class.append(dictionary_labels[img_name]['img_class'])
+    images_domains.append(dictionary_labels[img_name]['img_domain'])
+
+  unique_domains = list(np.unique(images_domains))
+  unique_classes = list(np.unique(images_class))
+  images_domains = [unique_domains.index(val) for val in images_domains]
+  images_class = [unique_classes.index(val) for val in images_class]
+
+  list_path_files = list()
+  for (dirpath, dirnames, filenames) in os.walk(path):
+      list_path_files += [os.path.join(dirpath, file) for file in filenames]
+
+  list_path_files = [f for f in list_files if f.endswith('.png')]
+  labels = [unique_classes.index(name.split('/')[-2]) for name in list_path_files]
+
+  filenames_ds = tf.data.Dataset.from_tensor_slices(list_path_files)
+  images_ds = filenames_ds.map(parse_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+  labels_ds = tf.data.Dataset.from_tensor_slices(labels)
+  ds = tf.data.Dataset.zip((images_ds, labels_ds))
+  ds = configure_for_performance(ds)
+
+  return ds
 
 def train_model(name_model, dataset_dir, epochs=50, learning_rate=0.0001, results_dir=os.getcwd() + '/results/', backbone_model=None,
               val_dataset=None, eval_val_set=None, eval_train_set=False, test_data=None,
