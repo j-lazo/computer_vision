@@ -167,7 +167,7 @@ def extract_frames_video(video_path, save_dir='', target_size=(350, 350)):
 
             if new_key == ord('s'):
                 # save the current frame
-                filename = ''.join([save_dir, '/', case_id, '_', name_frame, '.png'])
+                filename = ''.join([save_dir, '/', case_id, '_', name_frame, '.jpg'])
                 if len(coords) == 2:
                     # calculate the four corners of our region of interest
                     ty, by, tx, bx = coords[0][1], coords[1][1], coords[0][0], coords[1][0]
